@@ -1,0 +1,18 @@
+%% Hydra DHCP Server project
+%% (C) 2014 Angel J. Alvarez Miguel
+
+{application, dhcp_server,
+ [
+  {description, ["Hydra DHCP Server, a high performance and resilent Erlang DHCP server."
+  				,"\nCopyright: 2014 Angel J. Alvarez Miguel"
+  				]},
+  {author,["angeljalvarezmiguel@gmail.com"]},
+  {vsn, "0.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { dhcp_server_app, []}},
+  {env, []}
+ ]}.
