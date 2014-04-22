@@ -24,7 +24,7 @@ start_link(Opts) ->  %% Opts is a property list
 option_specs() ->
     {    
         [{middleman_pool_factor,$D,"decoders",{integer,1}
-                         ,"Use <n> packet processors per core"}]          %% options spec to set the pool of middlemen coders/decoders
+                         ,"Use 1, 2 or 4 packet processors per core"}]          %% options spec to set the pool of middlemen coders/decoders
         ,[fun check_middleman_pool/1]                                    %% fun to check the value supplied by users.
     }.
 
@@ -32,7 +32,7 @@ option_specs() ->
 check_middleman_pool(Opts) ->
     Schedulers = erlang:system_info(schedulers_online),
     PoolFactor = proplists:get_value(middleman_pool_factor,Opts,1),      %% Get the UDP port requested. (67 is the default). 
-    case (PoolFactor > 0) and (PoolFactor < 4) of                         %% Is requested port between bounds?
+    case (PoolFactor > 0) and (PoolFactor < 5) of                         %% Is requested port between bounds?
         true ->                                                           %% Ok, compute a suitable pool and makeup Options
         	PoolSize = Schedulers * PoolFactor,
         	[{middleman_pool, PoolSize} | proplists:delete(middleman_pool_factor,Opts)];
@@ -46,6 +46,7 @@ check_middleman_pool(Opts) ->
 init(Opts) ->
     io:format("~p: Init with Args: ~w\n", [?MODULE,Opts]),
 
+    %% Build a list of children upon user request
     PoolSize     = proplists:get_value(middleman_pool,Opts),
     ChildrenSpec = [ ?CHILD(X, worker, middleman_srv, [{who_you_are,srv_id(X)}|Opts]) || X <- lists:seq(1,PoolSize) ],
 

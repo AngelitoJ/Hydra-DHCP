@@ -3,7 +3,7 @@
 
 {application, dhcp_server,
  [
-  {description, ["Hydra DHCP Server, a high performance and resilent Erlang DHCP server."
+  {description, ["Hydra, a high performance and resilent Erlang DHCP server."
   				,"\nCopyright: 2014 Angel J. Alvarez Miguel"
   				]},
   {author,["angeljalvarezmiguel@gmail.com"]},
