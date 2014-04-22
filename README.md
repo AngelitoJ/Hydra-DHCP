@@ -69,6 +69,24 @@ INSTALL
 		- rebar clean
 		- rebar compile
 		- rebar escriptize
+	5. Run the server
+		$ ./dhcp_server
+
+		bash-3.2$ ./dhcp_server --help
+		Hydra DHCP Server, a high performance and resilent Erlang DHCP server.
+		Copyright: 2014 Angel J. Alvarez Miguel
+		Version: 0.1
+
+		Usage: ./dhcp_server [-P <procs>] [-V] [-v] [-d <debug>] [-?] [-D <middleman_pool_factor>] [-U <udp_port>]
+
+  		-P, --cores		Number of workers (default 2*core).
+  		-V, --version		Show software version.
+  		-v, --verbose		Show all actions performed.
+  		-d, --debug		Show debug info.
+  		-?, --help		Show this help.
+  		-D, --decoders	Use <n> packet processors per core
+  		-U, --udp		UDP listening port.
+
 
 
 Authors
