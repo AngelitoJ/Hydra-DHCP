@@ -1,8 +1,8 @@
 Hydra-DHCP
 ==========
 
-Hydra, a high performance and resilent DHCP server is a research project towards a distributed and scalable 
-DHCP service coded in Erlang/OTP for next generation IPAM scenarios.
+Hydra, a high performance and resilent Erlang DHCP server is a research project towards a distributed and scalable 
+DHCP service in Erlang/OTP for next generations IPAM scenarios.
 
 This is the source code of an Erlang/OTP application designed to function as a DHCP (Dynamic Host Configuration Protocol)
 service featuring scalability and resilence thanks to the great OTP framework capabilities.
@@ -24,7 +24,7 @@ Brief Project roadmap
 	- Multimaster data backend (Mnesia)
 
 
-Basic application arquitecture
+Basic application architecture
 ==============================
 
 	[UDP_SRV_SRV] <--UDP binaries--> [MIDDLEMAN_SRV] <--Erlang Terms--> [DORA_FSM] <--Erlang Terms--> [ADDR_POOL_SRV]
