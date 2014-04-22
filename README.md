@@ -87,6 +87,12 @@ INSTALL
   		-D, --decoders	Use <n> packet processors per core
   		-U, --udp		UDP listening port.
 
+  		Remember you need root privileges to open port 67, instead you can try something like this:
+
+  		$ ./dhcp_server --udp 2000
+
+  		so you dont need to be root... do you? 
+
 
 
 Authors

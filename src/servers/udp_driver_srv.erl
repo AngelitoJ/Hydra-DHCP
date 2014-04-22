@@ -51,7 +51,7 @@ check_valid_port(Opts) ->
 init(Args) ->
   io:format("~p: Init with Args: ~w\n", [?MODULE,Args]),
 
-  Pool      = discover_and_setup_pool(),
+  Pool      = discover_and_setup_pool(),                                   
   Socket    = setup_udp_port(Args),
 
   {ok, #driver_state{ socket = Socket, pool = Pool } }.
@@ -63,6 +63,7 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% Handle an UDP message from DHCP clients (68) and handle it out to a middleman process
+%% When we ran out of middleman Pids, we shoult ask for more, right now we quit and let supervior instantiate a new driver
 handle_info({udp, Socket, _IP, 68, Packet}, #driver_state{ pool = Pool} = State) ->
     io:format("Received UDP packet: ~p \n", [Packet]),
     case get_next_middleman(Pool) of
@@ -76,10 +77,11 @@ handle_info({udp, Socket, _IP, 68, Packet}, #driver_state{ pool = Pool} = State)
     end;
 
 %% Handle an UDP message from other clients and handle it out to a middleman process
+%% When we ran out of middleman Pids, we shoult ask for more, right now we quit and let supervior instantiate a new driver
 handle_info({udp, Socket, _IP, _SrcPort, Packet}, #driver_state{ pool = Pool} = State) ->
     io:format("Received UDP packet: ~p \n", [Packet]),
     case get_next_middleman(Pool) of
-        {nothing,_} ->
+        {nothing,_} ->                                                
             io:format("~p: my middleman pool is empty , discarding received UDP packet: ~p \n", [?MODULE,Packet]),
             gen_udp:close(Socket),
             {stop, empty_pool, State};
@@ -108,6 +110,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+%% Ask middleman supervisor for their children a store the list 
 discover_and_setup_pool() ->
   MiddlemanList = [ Child || {_, Child, _, _} <- supervisor:which_children(middleman_sup)],
   lists:foreach(fun (Pid) -> erlang:monitor(process,Pid) end, MiddlemanList),
@@ -130,10 +133,15 @@ delete_faulty_middleman({Used,Rest},Pid) ->
   {Used -- [Pid], Rest -- [Pid]}.
 
 
-
+%% Get UDP port from Options and setup socket
 setup_udp_port(Opts) ->
-  Port = proplists:get_value(udp_port,Opts),               %% Get the UDP port requested. (67 is the default). 
+  Port = proplists:get_value(udp_port,Opts),               %% Get the UDP port requested. 
   io:format("~p: Opening UPD port ~p..\n", [?MODULE,Port]),
-  {ok, Socket} = gen_udp:open(Port, [binary, inet, {broadcast, true}, {reuseaddr, true}]),
+  {ok, Socket} = gen_udp:open(Port, [
+                                       binary              %% send packets as binaries instead of lists
+                                      ,inet                %% make a IPv4 socket
+                                      ,{broadcast, true}   %% Allow bradcast
+                                      ,{reuseaddr, true}   %% Allows local reuse of port numbers
+                                    ]),
   Socket.
 
