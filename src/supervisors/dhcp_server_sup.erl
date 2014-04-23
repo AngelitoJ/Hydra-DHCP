@@ -12,7 +12,8 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(CHILD(I, Type, Args), {I, {I, start_link, [Args]}, permanent, infinity, Type, [I]}).
+-define(CHILDSUP(I, Args), {I, {I, start_link, [Args]}, permanent, infinity, supervisor, [I]}).
+-define(CHILDWRK(I, Args), {I, {I, start_link, [Args]}, permanent, 5000, worker, [I]}).
 
 %% ===================================================================
 %% API functions
@@ -29,10 +30,11 @@ init(Opts) ->
     io:format("~p: Init with Args: ~w\n", [?MODULE,Opts]),
 
     ChildrenSpec = [ 
-                      ?CHILD(addr_pool_sup, supervisor, Opts)  %% Address pool servers supervisor
-                     ,?CHILD(fsm_sup,       supervisor, Opts)  %% DORA finite state machines supervisors
-                     ,?CHILD(middleman_sup, supervisor, Opts)  %% Middleman pool (coding,decoding and fingerprinting) supervisor
-                     ,?CHILD(network_sup,   supervisor, Opts)  %% Network components supervisor
+                      ?CHILDWRK(ets_master_srv, Opts)  %% ETS master server, the heir of all ets tables, I hope it never dies..
+                     ,?CHILDSUP(addr_pool_sup,  Opts)  %% Address pool servers supervisor
+                     ,?CHILDSUP(fsm_sup,        Opts)  %% DORA finite state machines supervisors
+                     ,?CHILDSUP(middleman_sup,  Opts)  %% Middleman pool (coding,decoding and fingerprinting) supervisor
+                     ,?CHILDSUP(network_sup,    Opts)  %% Network components supervisor
                     ],
 
     {ok, { {one_for_one, 5, 10},
