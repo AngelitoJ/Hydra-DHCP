@@ -31,15 +31,20 @@ Brief Project roadmap
 Basic application architecture
 ==============================
 
-	[UDP_SRV_SRV] 
-	     |
-	     |
-	      --UDP binaries--> [MIDDLEMAN_SRV] 
-	                              |
-	                              |
-	                               --Erlang Terms--> [DORA_FSM]
-	                                                     |
-	                                                     |
+
+    [Supervisor]            [Supervisor]           [Supervisor]             [Supervisor]
+         |                        |                      |                        |
+         |                        |                      |                        |
+         |                        |                      |                        |
+	[UDP_SRV_SRV]                 |                      |                        | 
+	     |                        |                      |                        |
+	     |                        |                      |                        |
+	      --UDP binaries--> [MIDDLEMAN_SRV]              |                        |
+	                              |                      |                        |
+	                              |                      |                        |
+	                               --Erlang Terms--> [DORA_FSM]                   |
+	                                                     |                        |
+	                                                     |                        |
 	                                                      --Erlang Terms--> [ADDR_POOL_SRV]
 
 	1. UDP_DRV_SRV

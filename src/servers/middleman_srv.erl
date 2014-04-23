@@ -20,8 +20,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
-
+%% DHCP related functions
 -include("dhcp_messages.hrl").
+
 -record(middleman_state, {
                             id = undefined
                           }).
@@ -53,19 +54,19 @@ handle_call(_Request, _From, State) ->
 %%   {noreply, State}.
 
 %% Handle a posible DHCP message
-handle_cast({dhcp_packet, Packet}, #middleman_state{id = Id} = State) ->
+handle_cast({dhcp, Scope, Packet}, #middleman_state{id = Id} = State) ->
       io:format("~p: msg received!! ~p\n",[Id, binary_to_term(Packet)]),
     {noreply, State};
 
 %% Handle a binary coded erlang term
-handle_cast({generic_packet, Packet}, #middleman_state{id = Id} = State) ->
+handle_cast({udp, Scope, Packet}, #middleman_state{id = Id} = State) ->
       io:format("~p: msg received!! ~p\n",[Id, binary_to_term(Packet)]),
     {noreply, State};
 
 %% Handle any unknow message
 handle_cast(Msg, #middleman_state{id = Id} = State) ->
       io:format("~p: msg received!! ~p\n I must die!!\n",[Id, Msg]),
-    {stop, i_dont_like_msgs, State}.
+    {stop, i_dont_like_these_msgs, State}.
 
 handle_info(_Info, State) ->
     {noreply, State}.

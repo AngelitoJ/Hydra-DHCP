@@ -51,8 +51,8 @@ check_valid_port(Opts) ->
 init(Args) ->
   io:format("~p: Init with Args: ~w\n", [?MODULE,Args]),
 
-  Pool      = discover_and_setup_pool(),                                   
-  Socket    = setup_udp_port(Args),
+  {ok, Pool}      = discover_and_setup_pool(),                                   
+  Socket          = setup_udp_port(Args),
 
   {ok, #driver_state{ socket = Socket, pool = Pool } }.
 
@@ -64,31 +64,25 @@ handle_cast(_Msg, State) ->
 
 %% Handle an UDP message from DHCP clients (68) and handle it out to a middleman process
 %% When we ran out of middleman Pids, we shoult ask for more, right now we quit and let supervior instantiate a new driver
-handle_info({udp, Socket, _IP, 68, Packet}, #driver_state{ pool = Pool} = State) ->
+handle_info({udp, _Socket, Ip, 68, Packet}, #driver_state{ pool = Pool} = State) ->
     io:format("Received UDP packet: ~p \n", [Packet]),
-    case get_next_middleman(Pool) of
-        {nothing,_} ->
-            io:format("~p: my middleman pool is empty , discarding received UDP packet: ~p \n", [?MODULE,Packet]),
-            gen_udp:close(Socket),
-            {stop, empty_pool, State};
-        {Pid,NewPool} ->
-            gen_server:cast(Pid,{dhcp_packet, Packet}),
-            {noreply, State#driver_state{ pool = NewPool} }
-    end;
+    Msg = case Ip of 
+      {0,0,0,0} -> {dhcp, broadcast, Packet};
+      _         -> {dhcp, unicast, Packet}
+    end,
+    NewPool = send_to_pool(Msg,Pool),
+    {noreply, State#driver_state{ pool = NewPool} };
 
 %% Handle an UDP message from other clients and handle it out to a middleman process
 %% When we ran out of middleman Pids, we shoult ask for more, right now we quit and let supervior instantiate a new driver
-handle_info({udp, Socket, _IP, _SrcPort, Packet}, #driver_state{ pool = Pool} = State) ->
+handle_info({udp, _Socket, Ip, _SrcPort, Packet}, #driver_state{ pool = Pool} = State) ->
     io:format("Received UDP packet: ~p \n", [Packet]),
-    case get_next_middleman(Pool) of
-        {nothing,_} ->                                                
-            io:format("~p: my middleman pool is empty , discarding received UDP packet: ~p \n", [?MODULE,Packet]),
-            gen_udp:close(Socket),
-            {stop, empty_pool, State};
-        {Pid,NewPool} ->
-            gen_server:cast(Pid,{generic_packet, Packet}),
-            {noreply, State#driver_state{ pool = NewPool} }
-    end;
+    Msg = case Ip of 
+      {0,0,0,0} -> {udp, broadcast, Packet};
+      _         -> {udp, unicast, Packet}
+    end,
+    NewPool = send_to_pool(Msg,Pool),
+    {noreply, State#driver_state{ pool = NewPool} };
 
 %% Handle a DOWN message from a diying middlemen and delete it drom the pool list.
 handle_info({'DOWN', _, process, Pid, Reason}, #driver_state{ pool = Pool} = State) ->
@@ -112,25 +106,43 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Ask middleman supervisor for their children a store the list 
 discover_and_setup_pool() ->
-  MiddlemanList = [ Child || {_, Child, _, _} <- supervisor:which_children(middleman_sup)],
-  lists:foreach(fun (Pid) -> erlang:monitor(process,Pid) end, MiddlemanList),
-  io:format("~p: I got ~p middleman pids..\n", [?MODULE,length(MiddlemanList)]),
-  {[],MiddlemanList}.
+  case supervisor:which_children(middleman_sup) of
+    [Head |Tail] ->
+      Pids = lists:map(fun({_, Pid, _, _}) -> erlang:monitor(process, Pid), Pid end, [Head|Tail]),
+      io:format("~p: I got ~p middleman pids..\n", [?MODULE,length(Pids)]),
+      {ok, {[], Pids}};
+    _ ->
+      {error, empty}
+  end.
 
-
+%% send a msg to a Pid from the Pool, recycle the pool if empty, return the new pool
+send_to_pool(Msg,Pool) ->
+  case get_next_middleman(Pool) of
+    empty ->                                     %% the pool is empty!
+      io:format("~p: my middleman pool is empty, i'm getting a new one from the supervisor\n", [?MODULE]),
+      {ok, NewPool} = discover_and_setup_pool(),       %% get a new pool
+      send_to_pool(Msg,NewPool);                       %% try again!
+    {Pid, NewPool} ->                                  %% Ok we have at least one Pid
+      gen_server:cast(Pid,Msg),                        %% Send the Msg
+      NewPool
+  end.
+    
 %% get a middleman Pid in round-robin fashion or nothing if no available Pids
-get_next_middleman({[],[]} = M) ->           %% No Pids currently available sorry
-  {nothing, M};   
+get_next_middleman(empty) ->           %% No Pids currently available sorry
+  empty;   
 
-get_next_middleman({Used, []}) ->            %% Recycle the Used List and try again
+get_next_middleman({Used, []}) ->            %% Recycle the used list and try again
   get_next_middleman({[],Used});
 
 get_next_middleman({Used, [Next|Rest]}) ->   %% Return the next Pid and cycle the list 
   {Next, {[Next|Used], Rest}}.
 
-%% delete a faulty Pid from the available list of middleman Pids
-delete_faulty_middleman({Used,Rest},Pid) ->
-  {Used -- [Pid], Rest -- [Pid]}.
+%% delete a faulty Pid from the available list of middleman Pids and rturn the new pool or 'empty'
+delete_faulty_middleman({Used, Rest},Pid) ->
+  case {Used -- [Pid], Rest -- [Pid]} of
+    {[],[]}       -> empty;
+    {List1,List2} -> {List1,List2}
+  end.
 
 
 %% Get UDP port from Options and setup socket
@@ -144,4 +156,5 @@ setup_udp_port(Opts) ->
                                       ,{reuseaddr, true}   %% Allows local reuse of port numbers
                                     ]),
   Socket.
+
 
