@@ -1,7 +1,7 @@
 Hydra-DHCP
 ==========
 
-Hydra, a high performance and resilent Erlang DHCP server is a research project towards a distributed and scalable 
+Hydra, a high performance and resilient DHCP server is a research project towards a distributed and scalable 
 DHCP service in Erlang/OTP for next generations IPAM scenarios.
 
 This is the source code of an Erlang/OTP application designed to function as a DHCP (Dynamic Host Configuration Protocol)
@@ -21,7 +21,7 @@ Brief Project roadmap
 	- DHCP Fingerprinting
 
 - High Performance DHCP Service
-	- Hydra mode: Serving a pool of UDP ports (on suitable plaftforms with iptables like capabilities)
+	- Hydra mode: Serving a pool of UDP ports (on suitable platforms with iptables like capabilities)
 
 - Distributed DHCP service
 	- Master/Slave HA schemes.
@@ -107,7 +107,7 @@ INSTALL
   		so you dont need to be root... do you? 
 
   		$ sudo ./dhcp_service
-  		
+
 
 
 

@@ -120,23 +120,23 @@ dhcp_option_search(Key,Opts) ->
     end.
 
 
-%% DHCP options codes and names
- % 0 : "Pad Option",
-	% 	  1 : "Subnet Mask",
-	% 	  2 : "Time Offset",
-	% 	  3 : "Router Option",
+
+%% decode a option number into a symbolic name, not all option are implemented..
+decode_option_name(1) ->  subnet_mask;
+decode_option_name(2) ->  time_offset;
+decode_option_name(3) ->  router;
 	% 	  4 : "Time Server Option",
 	% 	  5 : "Name Server Option",
-	% 	  6 : "Domain Name Server Option",
+decode_option_name(6) ->  dns_server;
 	% 	  7 : "Log Server Option",
 	% 	  8 : "Cookie Server Option",
 	% 	  9 : "LPR Server Option",
 	% 	 10 : "Impress Server Option",
 	% 	 11 : "Resource Location Server Option",
-	% 	 12 : "Host Name Option",
+decode_option_name(12) -> host_name;
 	% 	 13 : "Boot File Size Option",
 	% 	 14 : "Merit Dump File",
-	% 	 15 : "Domain Name",
+decode_option_name(15) -> domain_name;
 	% 	 16 : "Swap Server",
 	% 	 17 : "Root Path",
 	% 	 18 : "Extensions Path",
@@ -149,7 +149,7 @@ dhcp_option_search(Key,Opts) ->
 	% 	 25 : "Path MTU Plateau Table Option",
 	% 	 26 : "Interface MTU Option",
 	% 	 27 : "All Subnets are Local Option",
-	% 	 28 : "Broadcast Address Option",
+decode_option_name(28) -> broadcast_address;
 	% 	 29 : "Perform Mask Discovery Option",
 	% 	 30 : "Mask Supplier Option",
 	% 	 31 : "Perform Router Discovery Option",
@@ -171,18 +171,17 @@ dhcp_option_search(Key,Opts) ->
 	% 	 47 : "NetBIOS over TCP/IP Scope Option",
 	% 	 48 : "X Window System Font Server Option",
 	% 	 49 : "X Window System Display Manager Option",
-	% 	 50 : "Requested IP Address",
-	% 	 51 : "IP Address Lease Time",
-	% 	 52 : "Option Overload",
-	% 	 53 : "DHCP Message Type",
-	% 	 54 : "Server Identifier",
-	% 	 55 : "Parameter Request List",
+decode_option_name(50) -> requested_ip_address;
+decode_option_name(51) -> lease_time;
+decode_option_name(53) -> message_type;
+decode_option_name(54) -> server_id;
+decode_option_name(55) -> parameter_request;
 	% 	 56 : "Message",
-	% 	 57 : "Maximum DHCP Message Size",
-	% 	 58 : "Renewal (T1) Time Value",
-	% 	 59 : "Rebinding (T2) Time Value",
+decode_option_name(57) -> max_message_size;
+decode_option_name(58) -> renewal_time;
+decode_option_name(59) -> rebinding_time;
 	% 	 60 : "Vendor class identifier",
-	% 	 61 : "Client-identifier",
+decode_option_name(61) -> client_id;
 	% 	 64 : "Network Information Service+ Domain Option",
 	% 	 65 : "Network Information Service+ Servers Option",
 	% 	 66 : "TFTP server name",
@@ -196,26 +195,6 @@ dhcp_option_search(Key,Opts) ->
 	% 	 74 : "Default Internet Relay Chat (IRC) Server Option",
 	% 	 75 : "StreetTalk Server Option",
 	% 	 76 : "StreetTalk Directory Assistance (STDA) Server Option",
-	% 	255 : "End Option",
-
-
-%% decode a option number into a symbolic name
-decode_option_name(1) ->  subnet_mask;
-decode_option_name(2) ->  time_offset;
-decode_option_name(3) ->  router;
-decode_option_name(6) ->  dns_server;
-decode_option_name(12) -> host_name;
-decode_option_name(15) -> domain_name;
-decode_option_name(28) -> broadcast_address;
-decode_option_name(50) -> requested_ip_address;
-decode_option_name(51) -> lease_time;
-decode_option_name(53) -> message_type;
-decode_option_name(54) -> server_id;
-decode_option_name(55) -> parameter_request;
-decode_option_name(57) -> max_message_size;
-decode_option_name(58) -> renewal_time;
-decode_option_name(59) -> rebinding_time;
-decode_option_name(61) -> client_id;
 decode_option_name(Op) ->
 	io:format("Error decoding DHCP Option: ~p~n", [Op]),
 	error.          %% I know, this should be an error..
