@@ -18,19 +18,32 @@ Brief Project roadmap
 
 - Basic DHCP service
 	- Simple file based data backend and SQL storage backend.
-	- Master/Slave HA schemes.
+	- DHCP Fingerprinting
+
+- High Performance DHCP Service
+	- Hydra mode: Serving a pool of UDP ports (on suitable plaftforms with iptables like capabilities)
 
 - Distributed DHCP service
-	- Multimaster data backend (Mnesia)
+	- Master/Slave HA schemes.
+	- Multimaster HA (Mnesia)
 
 
 Basic application architecture
 ==============================
 
-	[UDP_SRV_SRV] <--UDP binaries--> [MIDDLEMAN_SRV] <--Erlang Terms--> [DORA_FSM] <--Erlang Terms--> [ADDR_POOL_SRV]
+	[UDP_SRV_SRV] 
+	     |
+	     |
+	      --UDP binaries--> [MIDDLEMAN_SRV] 
+	                              |
+	                              |
+	                               --Erlang Terms--> [DORA_FSM]
+	                                                     |
+	                                                     |
+	                                                      --Erlang Terms--> [ADDR_POOL_SRV]
 
 	1. UDP_DRV_SRV
-		- One per UDP port served (currently only UDP 67), dispatch UDP messages between network hosts and erlang processes.
+		- One per UDP port served (currently on UDP port), dispatch UDP messages between network hosts and erlang processes.
 	2. MIDDLEMAN_SRV
 		- At least one per core, transform UDP message to erlang terms and viceversa, and talks to DORA finite state machines.  
 	3. DORA_FSM
@@ -45,7 +58,7 @@ SYSTEM REQUIREMENTS
 		- Unix-like compatible operating systems
 			- Currently tested on Mac OS X 10.8.5 (development platform)
 
-	2. Erlang enviroment
+	2. Erlang environment
 		- Currently tested on Erlang R16B03-1
 
 
@@ -92,6 +105,9 @@ INSTALL
   		$ ./dhcp_server --udp 2000
 
   		so you dont need to be root... do you? 
+
+  		$ sudo ./dhcp_service
+  		
 
 
 
