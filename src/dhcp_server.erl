@@ -102,15 +102,22 @@ app_main(AppName,Options) ->
 
    end.
 
-%%-spec wait_for_app( none()|Integer()) -> none().
+
+%% Wait for top supervisor to terminate or timeout 
 wait_for_app() -> 
     wait_for_app(infinity).
 
 wait_for_app(Timeout) ->
+    erlang:monitor(process,dhcp_server_sup),
     receive
-        stopped -> stopped
+        {'DOWN', _, process, Pref, Reason} ->
+            io:format("[MAIN] Application supervisor ~w terminated, with cause: ~p\n",[Pref,Reason]);
+        stopped ->
+            stopped
     after
-        Timeout -> stopped 
+        Timeout -> 
+            io:format("[MAIN] Application Timeout\n",[]),
+            stopped 
     end.
 
 

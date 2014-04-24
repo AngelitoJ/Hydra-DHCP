@@ -50,8 +50,6 @@ init(Args) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
-%%handle_cast(_Msg, State) ->
-%%   {noreply, State}.
 
 %% Handle a posible DHCP message
 handle_cast({dhcp, Scope, Packet}, #middleman_state{id = Id} = State) ->

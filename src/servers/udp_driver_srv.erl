@@ -7,8 +7,8 @@
 -define(SERVER, ?MODULE).
 
 -record(driver_state,{ 
-                         socket    = undefined  %% Socket servicing the UDP messages
-                        ,pool = {[],[]}         %% pool of Middlemen available in a round-robin fashion 
+                         socket  = undefined  %% Socket servicing the UDP messages
+                        ,pool    = empty      %%  {Used,Rest} | empty, pool of Middlemen available in a round-robin fashion 
                       }).
 
 %% ------------------------------------------------------------------
