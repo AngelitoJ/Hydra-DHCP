@@ -152,6 +152,9 @@ check_debug(Opts) ->
         false -> Opts                                        %% Yes, return the original list.
     end.
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 
+-endif.
 

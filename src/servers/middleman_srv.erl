@@ -54,6 +54,8 @@ handle_call(_Request, _From, State) ->
 %% Handle a posible DHCP message
 handle_cast({dhcp, Scope, Packet}, #middleman_state{id = Id} = State) ->
       io:format("~p: msg received!! ~p\n",[Id, binary_to_term(Packet)]),
+      %% Decode the packet and propagate scope info, just to help the FSM to make up its mind.
+      
     {noreply, State};
 
 %% Handle a binary coded erlang term

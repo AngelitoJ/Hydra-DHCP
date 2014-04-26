@@ -1,8 +1,8 @@
 %% Hydra DHCP Server project
 %% (C) 2014 Angel J. Alvarez Miguel
 
--module(addr_pool_srv).
--behaviour(dhcp_console_srv).
+-module(dhcp_console_srv).
+-behaviour(gen_server).
 -define(SERVER, ?MODULE).
 
 %% ------------------------------------------------------------------
