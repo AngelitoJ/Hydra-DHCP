@@ -30,7 +30,9 @@
 						, chaddr = CHAddr, sname = SName, file = File, options = DecodedOptions, msg_type = MessageType
 						, requested_ip = RequestedIp }).
 
-%% make a tagged msg suitable to be sent to a DORA gen_fsm. Tags allow easier processing in the fsm.
+
+%% make a tagged msg suitable to be sent to a DORA gen_fsm. Tags allow easier processing in the fsm, because
+%% most combinations of field in the DHCP packet will map to a diferent message.
 record_to_msg(?DHCP_RECORD) -> unasigned.
 
 

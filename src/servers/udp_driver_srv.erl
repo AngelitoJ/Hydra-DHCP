@@ -10,14 +10,6 @@
                          socket  = undefined  %% Socket servicing the UDP messages
                         ,pool    = empty      %%  {Used,Rest} | empty, pool of Middlemen available in a round-robin fashion 
                       }).
-
--ifdef(TEST).
-
--include_lib("eunit/include/eunit.hrl").
--compile(export_all).
-
--else.
-
 %% ------------------------------------------------------------------
 %% API Function Exports
 %% ------------------------------------------------------------------
@@ -30,7 +22,6 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
--endif.
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -95,7 +86,7 @@ handle_info({udp, _Socket, Ip, _SrcPort, Packet}, #driver_state{ pool = Pool} = 
 %% Handle a DOWN message from a diying middlemen and delete it drom the pool list.
 handle_info({'DOWN', _, process, Pid, Reason}, #driver_state{ pool = Pool} = State) ->
     io:format("~p: Hey! middleman ~p terminated with reason: ~p..\n", [?MODULE,Pid,Reason]),
-    NewState = State#driver_state{ pool = delete_faulty_middleman(Pool, Pid) },
+    NewState = State#driver_state{ pool = pool_remove_pid(Pool, Pid) },
     {noreply,  NewState };
 
 handle_info(Info, State) ->
@@ -118,14 +109,14 @@ discover_and_setup_pool() ->
     [Head |Tail] ->
       Pids = lists:map(fun({_, Pid, _, _}) -> erlang:monitor(process, Pid), Pid end, [Head|Tail]),
       io:format("~p: I got ~p middleman pids..\n", [?MODULE,length(Pids)]),
-      {ok, {[], Pids}};
+      {ok, pool_new(Pids)};
     _ ->
-      {error, empty}
+      {error, pool_new([])}
   end.
 
 %% send a msg to a Pid from the Pool, recycle the pool if empty, return the new pool
 send_to_pool(Msg,Pool) ->
-  case get_next_middleman(Pool) of
+  case pool_get_next(Pool) of
     empty ->                                     %% the pool is empty!
       io:format("~p: my middleman pool is empty, i'm getting a new one from the supervisor\n", [?MODULE]),
       {ok, NewPool} = discover_and_setup_pool(),       %% get a new pool
@@ -135,23 +126,6 @@ send_to_pool(Msg,Pool) ->
       NewPool
   end.
     
-%% get a middleman Pid in round-robin fashion or nothing if no available Pids
-get_next_middleman(empty) ->           %% No Pids currently available sorry
-  empty;   
-
-get_next_middleman({Used, []}) ->            %% Recycle the used list and try again
-  get_next_middleman({[],Used});
-
-get_next_middleman({Used, [Next|Rest]}) ->   %% Return the next Pid and cycle the list 
-  {Next, {[Next|Used], Rest}}.
-
-%% delete a faulty Pid from the available list of middleman Pids and rturn the new pool or 'empty'
-delete_faulty_middleman({Used, Rest},Pid) ->
-  case {Used -- [Pid], Rest -- [Pid]} of
-    {[],[]}       -> empty;
-    {List1,List2} -> {List1,List2}
-  end.
-
 
 %% Get UDP port from Options and setup socket
 setup_udp_port(Opts) ->
@@ -164,5 +138,49 @@ setup_udp_port(Opts) ->
                                       ,{reuseaddr, true}   %% Allows local reuse of port numbers
                                     ]),
   Socket.
+
+%% make a new pool of Pids
+pool_new()                        -> empty.
+pool_new([])                      -> empty;
+pool_new(Pids) when is_list(Pids) -> {[],Pids}.
+
+%% POOL: get next Pid in round-robin fashion or nothing if no available Pids
+pool_get_next(empty)               -> empty;   
+pool_get_next({Used, []})          -> pool_get_next({[],Used});      %% Recycle the used list and try again
+pool_get_next({Used, [Next|Rest]}) -> {Next, {[Next|Used], Rest}}.         %% Return the next Pid and cycle the list 
+
+
+%% delete a faulty Pid from the available list of Pids and return the new pool or 'empty'
+pool_remove_pid({Used, Rest},Pid) when is_pid(Pid) ->
+  case {Used -- [Pid], Rest -- [Pid]} of
+    {[],[]}       -> empty;
+    {List1,List2} -> {List1,List2}
+  end.
+
+-ifdef(TEST).
+
+-include_lib("eunit/include/eunit.hrl").
+
+pool_test_() -> { inparallel, [
+                    %% empty new
+                   ?_assertEqual(empty
+                                    ,pool_new())
+                    %% empty list new
+                  ,?_assertEqual(empty
+                                    ,pool_new([]))
+                    %% non empty list new
+                  ,?_assertEqual({[], [one,two,three]}
+                                    ,pool_new([one,two,three]))
+                    %% pool get next
+                  ,?_assertEqual({one, {[one],[two,three]}}
+                                    ,pool_get_next(pool_new([one,two,three])) )
+                    %% pool get next with list recycling
+                  ,?_assertEqual({one, {[one],[two,three]}}
+                                    ,pool_get_next( {[one,two,three], []} ) )
+                    %% pool remove
+                  ,?_assertEqual({[one], [three]}, pool_remove_pid({[one,self()], [three]},self()) )
+                ]}.
+
+-endif.
 
 
