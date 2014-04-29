@@ -11,6 +11,13 @@
                         ,pool    = empty      %%  {Used,Rest} | empty, pool of Middlemen available in a round-robin fashion 
                       }).
 
+-ifdef(TEST).
+
+-include_lib("eunit/include/eunit.hrl").
+-compile(export_all).
+
+-else.
+
 %% ------------------------------------------------------------------
 %% API Function Exports
 %% ------------------------------------------------------------------
@@ -23,6 +30,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
+-endif.
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
