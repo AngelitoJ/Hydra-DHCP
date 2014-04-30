@@ -1,26 +1,28 @@
 %% Hydra DHCP Server project
 %% (C) 2014 Angel J. Alvarez Miguel
 
--record (dhcp_packet, {
-						 op = 0
-						,htype = 0
-						,hlen = 0
-						,hops = 0
-						,xid = 0
-						,secs = 0
-						,flags = 0
-						,ciaddr = {0, 0, 0, 0}
-						,yiaddr = {0, 0, 0, 0}
-						,siaddr = {0, 0, 0, 0}
-						,giaddr = {0, 0, 0, 0}
-						,chaddr = {0, 0, 0, 0, 0, 0}
-						,sname = 0
-						,file = 0
-						,options = []
-						,msg_type
-						,requested_ip = {0, 0, 0, 0}
-					   }).
 
+%% Record to hold decoded values from a DHCP UPD packet
+-record (dhcp_packet, {
+						 op      = 0
+						,htype   = 0
+						,hlen    = 0
+						,hops    = 0
+						,xid     = 0
+						,secs    = 0
+						,flags   = 0
+						,ciaddr  = {0, 0, 0, 0}
+						,yiaddr  = {0, 0, 0, 0}          %% Offered IP address
+						,siaddr  = {0, 0, 0, 0}
+						,giaddr  = {0, 0, 0, 0}          %% Relay Address
+						,chaddr  = {0, 0, 0, 0, 0, 0}    %% Client HW address (MAC address)
+						,rqaddr  = {0, 0, 0, 0}          %% Requested IP address (decoded from Option 50)
+						,sname   = 0
+						,file    = 0
+						,options = []
+						,msg_type                        %% Message type (decoded from options)
+					   }).
+%% Macros for fast pattern matching
 -define(DHCP_PACKET, <<Op:8, HType:8, HLen:8, Hops:8, Xid:32, Secs:16, Flags:16/big
 						, CIAddr:4/binary, YIAddr:4/binary, SIAddr:4/binary, GIAddr:4/binary, CHAddr:16/binary
 						, SName:512, File:1024, 99:8, 130:8, 83:8, 99:8, Options/binary>>).
@@ -28,12 +30,64 @@
 -define(DHCP_RECORD, #dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xid = Xid, secs = Secs
 						, flags = Flags, ciaddr = CIAddr, yiaddr = YIAddr, siaddr = SIAddr, giaddr = GIAddr
 						, chaddr = CHAddr, sname = SName, file = File, options = DecodedOptions, msg_type = MessageType
-						, requested_ip = RequestedIp }).
+						, rqaddr = RequestedIp } = Packet).
 
 
-%% make a tagged msg suitable to be sent to a DORA gen_fsm. Tags allow easier processing in the fsm, because
+%% make a tagged msg suitable to be sent from/to a DORA gen_fsm. Tags allow easier processing in the fsm, because
 %% most combinations of field in the DHCP packet will map to a diferent message.
-record_to_msg(?DHCP_RECORD) -> unasigned.
+record_to_msg(?DHCP_RECORD) ->
+	case MessageType of
+%% DHCPDISCOVER. 
+%% Issued from the client to the server to solicit DHCP address assignment; the DHCPDISCOVER may include parameters 
+%% or options required by the client.
+		discover ->;
+%% DHCPOFFER. 
+%% Issued from the server to the client indicating an IP address offer including its corresponding lease time (and 
+%% other configuration parameters) to the client in response to a DHCPDISCOVER.
+		offer ->;
+%% DHCPREQUEST. 
+%% Issued from the client to a server in response to a DHCPOF- FER to accept or reject the offered IP address, along 
+%% with desired or additional parameter settings. The DHCPREQUEST is also used by clients desiring to extend or renew 
+%% their existing IP address lease.
+		request ->;
+%% DHCPDECLINE.
+%% Issued from the client to the server, to indicate that the IP address offered by the server is already in use by 
+%% another client. The DHCP server will then typically mark the IP address as unavailable.
+		decline ->;
+%% DHCPACK.
+%% Issued from the server to the client to positively acknowledge the grant of the IP address lease and associated 
+%% parameter settings. The client may now begin using the IP address and parameter values.
+		ack ->;
+%% DHCPNAK.
+%% Issued from the server to the client to negatively acknowledge the DHCP transaction. The client must cease the use 
+%% of the IP address and reinitiate the process if necessary.
+		nak -> ;
+%% DHCPRELEASE.
+%% Issued from the client to the server to inform the server that the client is relinquishing the IP address. The client 
+%% must cease the use of the IP address thereafter.
+		release ->;
+%% DHCPINFORM.
+%% Issued from the client to the server to request non-IP address configuration parameters from the server. The server 
+%% will formulate a DHCPACK reply with the associated values as appropriate.
+		inform ->
+%% DHCPFORCERENEW.
+%% Issued from the server to the client to force a client into the INIT state0 in order to obtain a new (different) 
+%% IP address. Few clients have implemented support of this message.
+%% DHCPLEASEQUERY.
+%% Issued from a relay agent or other device to a server to determine if a given MAC address, IP address, or 
+%% client-identifier value has an active lease and its associated lease parameter values according to the DHCP server 
+%% (used primarily by broadband access concentrators or edge devices).
+%% DHCPLEASEUNASSIGNED.
+%% Issued from a server to a relay agent in response to a DHCPLEASEQUERY informing the relay agent that this server 
+%% supports that address but there is no active lease.
+%% DHCPLEASEUNKNOWN.
+%% Issued from a server to a relay agent in response to a DHCPLEASEQUERY informing the relay agent that the server 
+%% has no knowledge of the client specified in the query.
+%% DHCPLEASEACTIVE. 
+%% Issued from a server to a relay agent in response to a DHCPLEASEQUERY with the endpoint location and remaining 
+%% lease time.
+
+	end.
 
 
 %% map a DHCP binary packet into a record for easy processing.
@@ -293,65 +347,3 @@ encode_value(Name, Value)                        -> Value.
 
 
 
-%% DHCPDISCOVER. 
-%% Issued from the client to the server to solicit DHCP address assignment; the DHCPDISCOVER may include parameters 
-%% or options required by the client.
-
-%%{discover ,broadcast ,direct  ,{XID} ,{HWADDR},options}
-%%{discover ,unicast   ,relayed ,{XID} ,{HWADDR},{GIADDR},{YIADDR},options}
-
-
-%% DHCPOFFER. 
-%% Issued from the server to the client indicating an IP address offer including its corresponding lease time (and 
-%% other configuration parameters) to the client in response to a DHCPDISCOVER.
-
-%%{offer}
-
-%% DHCPREQUEST. 
-%% Issued from the client to a server in response to a DHCPOF- FER to accept or reject the offered IP address, along 
-%% with desired or additional parameter settings. The DHCPREQUEST is also used by clients desiring to extend or renew 
-%% their existing IP address lease.
-
-%% DHCPACK.
-%% Issued from the server to the client to positively acknowledge the grant of the IP address lease and associated 
-%% parameter settings. The client may now begin using the IP address and parameter values.
-
-%% DHCPNAK.
-%% Issued from the server to the client to negatively acknowledge the DHCP transaction. The client must cease the use 
-%% of the IP address and reinitiate the process if necessary.
-
-%% DHCPDECLINE.
-%% Issued from the client to the server, to indicate that the IP address offered by the server is already in use by 
-%% another client. The DHCP server will then typically mark the IP address as unavailable.
-
-%% DHCPRELEASE.
-%% Issued from the client to the server to inform the server that the client is relinquishing the IP address. The client 
-%% must cease the use of the IP address thereafter.
-
-%% DHCPINFORM.
-%% Issued from the client to the server to request non-IP address configuration parameters from the server. The server 
-%% will formulate a DHCPACK reply with the associated values as appropriate.
-
-%% DHCPFORCERENEW.
-%% Issued from the server to the client to force a client into the INIT state0 in order to obtain a new (different) 
-%% IP address. Few clients have implemented support of this message.
-
-%% DHCPLEASEQUERY.
-%% Issued from a relay agent or other device to a server to determine if a given MAC address, IP address, or 
-%% client-identifier value has an active lease and its associated lease parameter values according to the DHCP server 
-%% (used primarily by broadband access concentrators or edge devices).
-
-%% DHCPLEASEUNASSIGNED.
-%% Issued from a server to a relay agent in response to a DHCPLEASEQUERY informing the relay agent that this server 
-%% supports that address but there is no active lease.
-
-%% DHCPLEASEUNKNOWN.
-%% Issued from a server to a relay agent in response to a DHCPLEASEQUERY informing the relay agent that the server 
-%% has no knowledge of the client specified in the query.
-%% DHCPLEASEACTIVE. 
-%% Issued from a server to a relay agent in response to a DHCPLEASEQUERY with the endpoint location and remaining 
-%% lease time.
-
-%%{offer}
-%%{request}
-%%{akcnowledge}
