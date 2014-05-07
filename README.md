@@ -12,7 +12,6 @@ Unix program, so for the most part you only need to follow the install instructi
 
 *HOLD YOUR HORSES!!*  The important bits are missing (as Apr'14) but we hope to get the bare functionality soon...
 
-[![Build Status](https://travis-ci.org/AngelitoJ/Hydra-DHCP.svg?branch=master)](https://travis-ci.org/AngelitoJ/Hydra-DHCP)
 
 Brief Project roadmap
 ======================
