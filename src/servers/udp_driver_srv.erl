@@ -111,7 +111,7 @@ discover_and_setup_pool() ->
       io:format("~p: I got ~p middleman pids..\n", [?MODULE,length(Pids)]),
       {ok, pool_new(Pids)};
     _ ->
-      {error, pool_new([])}
+      {error, pool_new()}
   end.
 
 %% send a msg to a Pid from the Pool, recycle the pool if empty, return the new pool
@@ -140,7 +140,7 @@ setup_udp_port(Opts) ->
   Socket.
 
 %% make a new pool of Pids
-pool_new()                        -> empty.
+pool_new()                        -> pool_new([]).
 pool_new([])                      -> empty;
 pool_new(Pids) when is_list(Pids) -> {[],Pids}.
 
