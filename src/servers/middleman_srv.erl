@@ -59,10 +59,10 @@ handle_cast({dhcp, _Scope, Packet}, #middleman_state{ id = Id, fsm_cache = Cache
   %% Here we go, decode packet
   {ok, Record}          = packet_to_record(Packet),          %% Decode Packet into a record
   ClientId              = get_client_id(Packet),             %% get the client id from the record contents
-  {ClientFSM, NewCache} = cache_get_pid(Cache,ClientId),     %% Lookup for the client FSM (and spawn a new one if needed) 
+  {ClientPid, NewCache} = cache_get_pid(Cache,ClientId),     %% Lookup for the client FSM (and spawn a new one if needed) 
   Msg                   = record_to_msg(Record),             %% make up a suitable message to the FSM
 
-  gen_fsm:send_event(Pid,Msg),
+  gen_fsm:send_event(ClientPid,Msg),
 
       
   {noreply, State#middleman_state{ fsm_cache = NewCache }};
@@ -78,7 +78,7 @@ handle_cast(Msg, #middleman_state{id = Id} = State) ->
     {stop, i_dont_like_these_msgs, State}.
 
 %% Handle a DOWN message from a diying fsm and remove it from the cache.
-handle_info({'DOWN', _, process, Pid, Reason}, #middelman_state{ fsm_cache = Cache} = State) ->
+handle_info({'DOWN', _, process, Pid, Reason}, #middleman_state{ fsm_cache = Cache} = State) ->
     io:format("~p: Hey! client FSM ~p terminated with reason: ~p..\n", [?MODULE,Pid,Reason]),
     NewState = State#middleman_state{ fsm_cache = cache_remove_pid(Cache, Pid) },
 
@@ -99,10 +99,24 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+
+%% resolve client id from internel cache or ask fsm_manager to spawn a new client FSM
+-spec cache_get_pid(dict(),atom()) -> {pid(),dict()}.
+cache_get_pid(Cache,Id) -> {undefined,dict:new()}.
+
+-spec cache_remove_pid(dict(), atom()) -> dict().
+cache_remove_pid(Cache, Pid) -> dict:new().
+
+
 %% make a tagged msg suitable to be sent from/to a DORA gen_fsm. Tags allow easier processing in the fsm, because
 %% most combinations of field in the DHCP packet will map to a diferent message.
-record_to_msg(?DHCP_RECORD) ->
-  myPid = self(),             %% Send this process Pid so FSM dont have to deal with Pid resolution
+
+record_to_msg(#dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xid = Xid, secs = Secs
+            , flags = Flags, ciaddr = CIAddr, yiaddr = YIAddr, siaddr = SIAddr, giaddr = GIAddr
+            , chaddr = CHAddr, sname = SName, file = File, options = DecodedOptions, msg_type = MessageType
+            , rqaddr = RequestedIp, client_unicast = ClientScope } = Packet) ->
+
+  MyPid = self(),             %% Send this process Pid so FSM dont have to deal with Pid resolution
   case MessageType of
 
     %% DHCPDISCOVER. Issued from the client to the server to solicit DHCP address assignment; the DHCPDISCOVER may 
@@ -141,21 +155,21 @@ record_to_msg(?DHCP_RECORD) ->
   end.
 
 %% make a DHCP record in responde to a DORA machine tagged msg, different msgs map to a diferent options into the DHCP message.
-msg_to_record({Msg,Data}) ->
-  case Msg of
+% msg_to_record({Msg,Data}) ->
+%   case Msg of
 
-    %% DHCPOFFER. Issued from the server to the client indicating an IP address offer including its corresponding 
-    %% lease time (and other configuration parameters) to the client in response to a DHCPDISCOVER.
-    offer -> {offer, Packet};
+%     %% DHCPOFFER. Issued from the server to the client indicating an IP address offer including its corresponding 
+%     %% lease time (and other configuration parameters) to the client in response to a DHCPDISCOVER.
+%     offer -> {offer, Packet};
 
-    %% DHCPACK. Issued from the server to the client to positively acknowledge the grant of the IP address lease 
-    %% and associated parameter settings. The client may now begin using the IP address and parameter values.
-    ack -> {ack, Packet};
+%     %% DHCPACK. Issued from the server to the client to positively acknowledge the grant of the IP address lease 
+%     %% and associated parameter settings. The client may now begin using the IP address and parameter values.
+%     ack -> {ack, Packet};
 
-    %% DHCPNAK. Issued from the server to the client to negatively acknowledge the DHCP transaction. The client 
-    %% must cease the use of the IP address and reinitiate the process if necessary.
-    nack -> {nack, Packet}
-  end.
+%     %% DHCPNAK. Issued from the server to the client to negatively acknowledge the DHCP transaction. The client 
+%     %% must cease the use of the IP address and reinitiate the process if necessary.
+%     nack -> {nack, Packet}
+%   end.
 
 %% get client id from DHCP record, use hwaddr as a default
 get_client_id(#dhcp_packet{ chaddr = Id }) -> Id. 
@@ -194,7 +208,11 @@ packet_to_record(Unknown) ->
   {error, unknown_packet}.
 
 %% Generic mapping of DHCP binary packet to record, (TODO: oveload this to build specific responses)
-record_to_packet(?DHCP_RECORD) ->
+record_to_packet(#dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xid = Xid, secs = Secs
+            , flags = Flags, ciaddr = CIAddr, yiaddr = YIAddr, siaddr = SIAddr, giaddr = GIAddr
+            , chaddr = CHAddr, sname = SName, file = File, options = DecodedOptions, msg_type = MessageType
+            , rqaddr = RequestedIp, client_unicast = ClientScope } = Packet) ->
+
   EncodedOptions = dhcp_encode_options(DecodedOptions),
   EncodedPacket = <<Op:8, HType:8, HLen:8, Hops:8, Xid:32, Secs:16, Flags:16/big
             ,(tuple_to_ipv4(CIAddr))/binary, (tuple_to_ipv4(YIAddr))/binary

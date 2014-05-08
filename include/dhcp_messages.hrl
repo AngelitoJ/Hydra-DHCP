@@ -30,10 +30,10 @@
 						, CIAddr:4/binary, YIAddr:4/binary, SIAddr:4/binary, GIAddr:4/binary, CHAddr:16/binary
 						, SName:512, File:1024, 99:8, 130:8, 83:8, 99:8, Options/binary>>).
 
--define(DHCP_RECORD, #dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xid = Xid, secs = Secs
+-define(DHCP_RECORD, "#dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xid = Xid, secs = Secs
 						, flags = Flags, ciaddr = CIAddr, yiaddr = YIAddr, siaddr = SIAddr, giaddr = GIAddr
 						, chaddr = CHAddr, sname = SName, file = File, options = DecodedOptions, msg_type = MessageType
-						, rqaddr = RequestedIp, client_unicast = ClientScope } = Packet).
+						, rqaddr = RequestedIp, client_unicast = ClientScope } = Packet").
 
 
 
