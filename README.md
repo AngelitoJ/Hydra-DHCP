@@ -11,8 +11,7 @@ This is work in progress, yet a rebarized "shell" is provided from day one to ma
 Unix program, so for the most part you only need to follow the install instructions to get a single standalone "hydra-server" executable.
 
 *HOLD YOUR HORSES!!*  The important bits are missing (as Apr'14) but we hope to get the bare functionality soon...
-
-[![Build Status](https://travis-ci.org/AngelitoJ/Hydra-DHCP.svg?branch=master)](https://travis-ci.org/AngelitoJ/Hydra-DHCP)
+[![Build Status](https://travis-ci.org/AngelitoJ/Hydra-DHCP.svg?branch=master)](https://travis-ci.org/AngelitoJ/Hydra-DHCP) When build status is green is safe to clone the repository. We will provide also, stable releases as soon as posible.
 
 Brief Project roadmap
 ======================
