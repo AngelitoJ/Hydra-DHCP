@@ -32,18 +32,19 @@ option_specs() ->
 check_pool_dir(Opts) ->
     Dir        = proplists:get_value(datadir,Opts),
 
-    Acc = file_lib:foldl_files(Dir
+    Acc = filelib:fold_files(Dir
                                 ,"pool*.dat"                                       %% Look for pool files
                                 ,false                                             %% Not recursively
                                 ,fun(File,{Bool,List}) -> 
-                                                    case filelib:is_file(File) of  %% check pool file is valis (fake this )
+                                                    case filelib:is_file(File) of  %% check pool file is valid (its fake check )
                                                         true -> {Bool,[File|List]};
                                                         false -> {false,File}
                                                     end
                                                 end
-                                ,{true,[]}),
+                                ,{true,[]}
+                                ),
     case Acc of
-        {true, []}       -> {error, {"No pool files found!"}};
+        {true, []}       -> {error, {"No pool files found!",[]}};
         {true, Pools}    -> [{pool_files, Pools }|Opts];
         {false, Invalid} -> {error, {"Invalid Pools file: ", Invalid }}
     end.
