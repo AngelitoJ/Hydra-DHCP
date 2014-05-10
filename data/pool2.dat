@@ -1,0 +1,15 @@
+
+{ pooldata,
+    {simplepool, [
+             {name, "Universidad2"}
+                ,{range, {10,10,0,2}, {10,10,1,253}}
+            ,{options, [ 
+                     {lease_time, 3600}
+                    ,{renewal_time, 1800}
+                    ,{rebinding_time, 3000}
+                    ,{subnet_mask, {255, 255, 254, 0}}
+                    ,{dns_server, {192, 168, 1, 1}}
+                    ,{domain_name, "uah.es"}
+                    ,{router, {10, 10, 1, 254}}
+                    ]}
+           ]}}.

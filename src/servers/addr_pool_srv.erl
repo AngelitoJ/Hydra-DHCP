@@ -9,7 +9,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/0]).
+-export([start_link/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -22,17 +22,18 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(Opts) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, Opts, []).
+
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(Args) ->
-  io:format("~p: Init with Args: ~p\n", [?MODULE,Args]),
+init(Opts) ->
+  io:format("~p: Init with Args: ~p\n", [?MODULE,Opts]),
 
-    {ok, Args}.
+    {ok, Opts}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.

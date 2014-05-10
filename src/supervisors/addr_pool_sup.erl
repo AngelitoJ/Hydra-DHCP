@@ -6,7 +6,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/1]).
+-export([start_link/1, option_specs/0, check_pool_dir/1]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -20,6 +20,33 @@
 
 start_link(Opts) ->  %% Opts is a property list
     supervisor:start_link({local, ?MODULE}, ?MODULE, Opts).
+
+option_specs() ->
+    {    
+        [{pool_dir,$U,"pooldir",string,"Pool data directory."}]          %% options spec to request a udp port on the cmd-line
+        ,[fun check_pool_dir/1]                                         %% fun to check udp_port supplied by users.
+    }.
+
+%% Check valid pool dir (and check pool files inside)
+-spec check_pool_dir([any()]) -> [any()].
+check_pool_dir(Opts) ->
+    Dir        = proplists:get_value(datadir,Opts),
+
+    Acc = file_lib:foldl_files(Dir
+                                ,"pool*.dat"                                       %% Look for pool files
+                                ,false                                             %% Not recursively
+                                ,fun(File,{Bool,List}) -> 
+                                                    case filelib:is_file(File) of  %% check pool file is valis (fake this )
+                                                        true -> {Bool,[File|List]};
+                                                        false -> {false,File}
+                                                    end
+                                                end
+                                ,{true,[]}),
+    case Acc of
+        {true, []}       -> {error, {"No pool files found!"}};
+        {true, Pools}    -> [{pool_files, Pools }|Opts];
+        {false, Invalid} -> {error, {"Invalid Pools file: ", Invalid }}
+    end.
 
 %% ===================================================================
 %% Supervisor callbacks

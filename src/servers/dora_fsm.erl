@@ -20,7 +20,7 @@
          handle_sync_event/4, handle_info/3, terminate/3,
          code_change/4]).
 
--export([idle/2, offer/2]).
+-export([idle/2, offer/2, bound/2]).
 
 -record(fsm_state, { id = undefined }).
 -define(STATE_TRACE(Id, EV, CUR, NEXT), io:format("Id: Received EV while in CUR state, going to NEXT\n", [])).
