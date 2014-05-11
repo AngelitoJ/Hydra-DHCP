@@ -34,8 +34,8 @@
 %% ------------------------------------------------------------------
 
 start_link(Opts) ->
-	Id = proplists:get_value(who_you_are,Opts), 
-    gen_server:start_link({local, Id}, ?MODULE, Opts, []).
+  Id = proplists:get_value(who_you_are,Opts), 
+  gen_server:start_link({local, Id}, ?MODULE, Opts, []).
 
 
 %% ------------------------------------------------------------------
@@ -43,10 +43,12 @@ start_link(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Args) ->
-	Id = proplists:get_value(who_you_are,Args), 
-	io:format("~p: Init with Args: ~w\n", [Id,Args]),
-    NewState = #middleman_state{ id = Id, fsm_cache = dict:new() },
-    {ok, NewState}.
+  Id = proplists:get_value(who_you_are,Args), 
+  NewState = #middleman_state{ id = Id, fsm_cache = dict:new() },
+
+  io:format("~p: Init..\n", [Id]),
+  
+  {ok, NewState}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
