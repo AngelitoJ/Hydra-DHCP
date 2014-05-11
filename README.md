@@ -38,12 +38,13 @@ Basic application architecture
          |                        |                      |                        |
          |                        |                      |                        |
 	[UDP_SRV_SRV]                 |                      |                        | 
+	     |                  [MIDDLEMAN_SRV]          [DORA_FSM]             [ADDR_POOL_SRV]
 	     |                        |                      |                        |
-	     |                        |                      |                        |
-	      --UDP binaries--> [MIDDLEMAN_SRV]              |                        |
+	      --UDP binaries--> [MIDDLEMAN_SRV]          [DORA_FSM]             [ADDR_POOL_SRV]
 	                              |                      |                        |
+                                  |                  [DORA_FSM]             [ADDR_POOL_SRV]
 	                              |                      |                        |
-	                               --Erlang Terms--> [DORA_FSM]                   |
+	                               --Erlang Terms--> [DORA_FSM]             [ADDR_POOL_SRV]
 	                                                     |                        |
 	                                                     |                        |
 	                                                      --Erlang Terms--> [ADDR_POOL_SRV]
