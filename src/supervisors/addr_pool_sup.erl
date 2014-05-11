@@ -23,19 +23,18 @@ start_link(Opts) ->  %% Opts is a property list
 
 option_specs() ->
     {    
-        [{pool_dir,$U,"pooldir",string,"Pool data directory."}]          %% options spec to request a udp port on the cmd-line
+        [{pool_dir,$D,"pooldir",string,"Pool data directory."}]          %% options spec to request a udp port on the cmd-line
         ,[fun check_pool_dir/1]                                         %% fun to check udp_port supplied by users.
     }.
 
 %% Check valid pool dir (and check pool files inside)
 -spec check_pool_dir([any()]) -> [any()].
 check_pool_dir(Opts) ->
-    Dir        = proplists:get_value(datadir,Opts),
-
+    Dir        = proplists:get_value(datadir,Opts,"./data"),
     Acc = filelib:fold_files(Dir
                                 ,"pool*.dat"                                       %% Look for pool files
                                 ,false                                             %% Not recursively
-                                ,fun(File,{Bool,List}) -> 
+                                ,fun(File,{Bool,List}) ->
                                                     case filelib:is_file(File) of  %% check pool file is valid (its fake check )
                                                         true -> {Bool,[File|List]};
                                                         false -> {false,File}
