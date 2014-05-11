@@ -27,8 +27,6 @@ start_link(Opts) ->  %% Opts is a property list
 %% ===================================================================
 
 init(Opts) ->
-    io:format("~p: Init with Args: ~w\n", [?MODULE,Opts]),
-
     ChildrenSpec = [ 
                       ?CHILDWRK(ets_master_srv, Opts)  %% ETS master server, the heir of all ets tables, I hope it never dies..
                      ,?CHILDSUP(addr_pool_sup,  Opts)  %% Address pool servers supervisor
@@ -36,6 +34,7 @@ init(Opts) ->
                      ,?CHILDSUP(middleman_sup,  Opts)  %% Middleman pool (coding,decoding and fingerprinting) supervisor
                      ,?CHILDSUP(network_sup,    Opts)  %% Network components supervisor
                     ],
+    io:format("~p: Init, I got ~p children to spawn..\n", [?MODULE,length(ChildrenSpec)]),
 
     {ok, { {one_for_one, 5, 10},
     							ChildrenSpec } }.
