@@ -53,20 +53,29 @@ check_pool_dir(Opts) ->
 %% ===================================================================
 
 init(Opts) ->
+	%% Get pool info form Options and prepare a Child for every pool we found.
     case proplists:get_value(pool_files,Opts,undefined) of
     	undefined -> 
     				{error,no_pools};
     	Pools     ->
-    				ChildrenSpec = [ ?CHILD(X, worker, addr_pool_srv, [{who_you_are,srv_id(X)}]) 
-    								|| X <- lists:seq(1,length(Pools)) ],
+    				NumChildren  = length(Pools),
+    				ChildrenSpec = lists:map(fun(Idx) ->
+    													WorkerName = {who_you_are, list_to_atom("addr_pool_srv_" ++ integer_to_list(Idx))},
+    													Pooldata   = {pool_file, lists:nth(Idx,Pools)},
+    													{
+    														 Idx
+    														,{addr_pool_srv, start_link, [ [Pooldata, WorkerName] ]}
+    														,permanent
+    														,5000
+    														,worker
+    														,[addr_pool_srv]
+    													} end
+    										,lists:seq(1,NumChildren)),
+
     				io:format("[~p] Initiating, got ~p address pools to setup\n", [?MODULE,length(Pools)]),
     				{ok, { {one_for_one, 5, 10}, ChildrenSpec} }
     end.
 
-%% Make a new atom to name a middlemen server
-srv_id(Id) ->
-	Server_name = "addr_pool_srv_" ++ integer_to_list(Id),
-	list_to_atom(Server_name).
 
 
 
