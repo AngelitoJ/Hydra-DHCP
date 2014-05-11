@@ -18,12 +18,19 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+
+-record(pool_state, {
+						 id       = undefined
+						,pool_file = undefined 
+					}).
+
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
 start_link(Opts) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, Opts, []).
+	Id = proplists:get_value(who_you_are,Opts), 
+	gen_server:start_link({local, Id}, ?MODULE, Opts, []).
 
 
 %% ------------------------------------------------------------------
@@ -31,9 +38,13 @@ start_link(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Opts) ->
-  io:format("~p: Init with Args: ~p\n", [?MODULE,Opts]),
+	Id       = proplists:get_value(who_you_are,Opts), 
+    NewState = #pool_state{ id = Id, pool_file = ""},
 
-    {ok, Opts}.
+	io:format("~p: Initiating..\n", [Id]),
+
+    {ok, NewState}.
+
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
