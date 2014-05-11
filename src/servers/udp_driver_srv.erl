@@ -47,11 +47,11 @@ check_valid_port(Opts) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(Args) ->
-  io:format("~p: Init with Args: ~w\n", [?MODULE,Args]),
+init(Opts) ->
+  io:format("~p: Init..\n", [?MODULE]),
 
   {ok, Pool}      = discover_and_setup_pool(),                                   
-  Socket          = setup_udp_port(Args),
+  Socket          = setup_udp_port(Opts),
 
   {ok, #driver_state{ socket = Socket, pool = Pool } }.
 
