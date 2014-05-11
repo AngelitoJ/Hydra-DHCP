@@ -30,7 +30,7 @@ start_link(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Args) ->
-  io:format("~p: Init with Args: ~p\n", [?MODULE,Args]),
+  io:format("~p: Init..\n", [?MODULE]),
 
     {ok, Args}.
 
