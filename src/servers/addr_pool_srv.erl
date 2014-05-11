@@ -38,10 +38,11 @@ start_link(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Opts) ->
-	Id       = proplists:get_value(who_you_are,Opts), 
-    NewState = #pool_state{ id = Id, pool_file = ""},
+	Id       = proplists:get_value(who_you_are,Opts),
+	PoolFile = proplists:get_value(pool_file,Opts), 
+    NewState = #pool_state{ id = Id, pool_file = PoolFile},
 
-	io:format("~p: Initiating..\n", [Id]),
+	io:format("[~p]: Initiating pool from file ~ts..\n", [Id,PoolFile]),
 
     {ok, NewState}.
 
