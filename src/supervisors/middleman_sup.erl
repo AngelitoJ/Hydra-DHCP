@@ -23,8 +23,8 @@ start_link(Opts) ->  %% Opts is a property list
 
 option_specs() ->
     {    
-        [{middleman_pool_factor,$D,"decoders",{integer,1}
-                         ,"Use 1, 2 or 4 packet processors per core"}]          %% options spec to set the pool of middlemen coders/decoders
+        [{middleman_pool_factor,$M,"middleman",{integer,1}
+                         ,"Use 1, 2 or 4 middlemen (packet processors) per core"}]          %% options spec to set the pool of middlemen coders/decoders
         ,[fun check_middleman_pool/1]                                    %% fun to check the value supplied by users.
     }.
 
@@ -44,11 +44,11 @@ check_middleman_pool(Opts) ->
 %% ===================================================================
 
 init(Opts) ->
-    io:format("~p: Init with Args: ~w\n", [?MODULE,Opts]),
-
     %% Build a list of children upon user request
     PoolSize     = proplists:get_value(middleman_pool,Opts),
     ChildrenSpec = [ ?CHILD(X, worker, middleman_srv, [{who_you_are,srv_id(X)}|Opts]) || X <- lists:seq(1,PoolSize) ],
+
+    io:format("~p: Init.. I got ~p children to spawn\n", [?MODULE,length(ChildrenSpec)]),
 
     {ok, { {one_for_one, 5, 10}, ChildrenSpec } }.
 
