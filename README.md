@@ -28,16 +28,26 @@ Brief Project roadmap
 	- Multimaster HA (Mnesia)
 
 
+           "Proof of concept"             Features      Integration    Working Product
+  =PROGRESS==>----|-------------|-------------|-------------|---------------|---------------|--------------/ /-
+                          | Prototype        QA     |    more QA         Future          Killer App? 
+                          |                         |
+  Some funding desirable<–                           -> Career Opportunities?
+
+
+
+
 Basic application architecture
 ==============================
                                        [Top Supervisor]
                                               |
-          ------------------------------------------------------------------------
-         |                        |                      |                        |
-    [Supervisor]            [Supervisor]           [Supervisor]             [Supervisor]
-         |                        |                      |                        |
-         |                        |                      |                        |
-	[UDP_SRV_SRV]                 |                      |                        | 
+          --------------------------------------------------------------------------------------------
+         |                        |                      |                        |                   |
+    [Supervisor]            [Supervisor]           [Supervisor]             [Supervisor]         [Supervisor]
+         |                        |                 |    |                        |                   |
+         |                        |    Pid?         |    |                        |               [Console]
+         |                        |     --->[FSM cache] [*]                       |                   |
+	[UDP_SRV_SRV]                 |    |                 |                        |              [Table Heir]
 	     |                  [MIDDLEMAN_SRV]          [DORA_FSM]             [ADDR_POOL_SRV]
 	     |                        |                      |                        |
 	      --UDP binaries--> [MIDDLEMAN_SRV]          [DORA_FSM]             [ADDR_POOL_SRV]
@@ -47,7 +57,9 @@ Basic application architecture
 	                               --Erlang Terms--> [DORA_FSM]             [ADDR_POOL_SRV]
 	                                                     |                        |
 	                                                     |                        |
-	                                                      --Erlang Terms--> [ADDR_POOL_SRV]
+                                                          --Erlang Terms--> [ADDR_POOL_SRV]
+
+    [*] Simple_one_for_one Supervisor
 
 	1. UDP_DRV_SRV
 		- One per UDP port served (currently on UDP port), dispatch UDP messages between network hosts and erlang processes.
