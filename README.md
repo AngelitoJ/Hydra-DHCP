@@ -28,11 +28,11 @@ Brief Project roadmap
 	- Multimaster HA (Mnesia)
 
 
-           "Proof of concept"             Features      Integration    Working Product
-  =PROGRESS==>----|-------------|-------------|-------------|---------------|---------------|--------------/ /-
-                          | Prototype        QA     |    more QA         Future          Killer App? 
-                          |                         |
-  Some funding desirable<–                           -> Career Opportunities?
+           "Proof of concept"         Features      Integration  Working Product
+  =PROGRESS==>----|-----------|----------|-------------|-------------|----------|-------/ /-
+                        | Prototype     QA     |    more QA      Future     Killer App? 
+                        |                      |
+  		Some funding ?<–                         -> Career Opportunities?
 
 
 
