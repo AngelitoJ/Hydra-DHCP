@@ -99,18 +99,21 @@ INSTALL
 		$ ./dhcp_server
 
 		bash-3.2$ ./dhcp_server --help
-		Hydra DHCP Server, a high performance and resilent Erlang DHCP server.
+
+		Hydra, a high performance and resilent Erlang DHCP server.
 		Copyright: 2014 Angel J. Alvarez Miguel
 		Version: 0.1
 
-		Usage: ./dhcp_server [-V] [-v] [-d <debug>] [-?] [-D <middleman_pool_factor>] [-U <udp_port>]
+		Usage: ./dhcp_server [-D <pool_dir>] [-P <procs>] [-V] [-v] [-d <debug>] [-?] [-M <middleman_pool_factor>] [-U <udp_port>]
 
-  		-V, --version	Show software version.
-  		-v, --verbose	Show all actions performed.
-  		-d, --debug		Show debug info.
-  		-?, --help		Show this help.
-  		-D, --decoders	Use 1,2 or 4 packet processors per core
-  		-U, --udp		UDP listening port.
+		-D, --pooldir		Pool data directory.
+		-P, --cores			Number of workers (default 2*core).
+		-V, --version		Show software version.
+		-v, --verbose		Show all actions performed.
+		-d, --debug			Show debug info.
+		-?, --help			Show this help.
+		-M, --middleman		Use 1, 2 or 4 middlemen (packet processors) per core
+		-U, --udp			UDP listening port.
 
   		Remember you need root privileges to open port 67, instead you can try something like this:
 
