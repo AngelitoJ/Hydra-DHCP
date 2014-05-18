@@ -20,8 +20,9 @@
 
 
 -record(pool_state, {
-						 id       = undefined
-						,pool_file = undefined 
+						 id        = undefined
+						,filepath  = undefined
+						,data      = []         %% A property list containing pool attributes
 					}).
 
 %% ------------------------------------------------------------------
@@ -38,11 +39,15 @@ start_link(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Opts) ->
-	Id       = proplists:get_value(who_you_are,Opts),
-	PoolFile = proplists:get_value(pool_file,Opts), 
-    NewState = #pool_state{ id = Id, pool_file = PoolFile},
+	Id                                  = proplists:get_value(who_you_are,Opts),
+	PoolFile                            = proplists:get_value(pool_file,Opts),
+	Data                                = load_pool(PoolFile),
+    NewState                            = #pool_state{ id = Id, filepath = PoolFile, data = Data},
 
 	io:format("[~p]: Initiating pool from file ~ts..\n", [Id,PoolFile]),
+
+	lists:foreach(fun(I) -> io:format("POOL ~p\n",[I]) end,
+					Data),
 
     {ok, NewState}.
 
@@ -66,3 +71,9 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+load_pool(File) ->
+	{ok, [{pooldata,PoolData}|_]} = file:consult(File),
+	case PoolData of
+		{simplepool, PoolOpts} -> PoolOpts;
+		_ -> error("pool type not supported")
+	end.
