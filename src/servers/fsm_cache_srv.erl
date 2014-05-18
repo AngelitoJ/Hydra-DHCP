@@ -5,6 +5,11 @@
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
 
+-record(state,{
+				 pid_to_id = undefined
+				,id_to_pid = undefined
+				}).
+
 %% ------------------------------------------------------------------
 %% API Function Exports
 %% ------------------------------------------------------------------
@@ -29,10 +34,10 @@ start_link(Opts) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(Args) ->
-  io:format("~p: Init..\n", [?MODULE]),
-
-    {ok, Args}.
+init(Opts) ->
+	io:format("~p: Init..\n", [?MODULE]),
+	State = #state{ pid_to_id = dict:new(), id_to_pid = dict:new() },
+    {ok, State}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
