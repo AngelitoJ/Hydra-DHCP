@@ -123,6 +123,58 @@ INSTALL
 
   		$ sudo ./dhcp_service
 
+  		Once the server start, you should see something like this
+
+  		bash-3.2$ ./dhcp_server --udp 9000
+		executing user profile in HOME/.erlang
+
+		Hydra, a high performance and resilent Erlang DHCP server.
+		Copyright: 2014 Angel J. Alvarez Miguel
+		Version: 0.1
+
+		dhcp_server_sup: Init, I got 5 children to spawn..
+		ets_master_srv: Init..
+		[addr_pool_sup] Initiating, got 2 address pools to setup
+		[addr_pool_srv_1]: Initiating pool from file ./data/pool2.dat..
+			POOL {name,"Universidad2"}
+			POOL {range,{10,10,0,2},{10,10,1,253}}
+			POOL {options,[{lease_time,3600},
+               				{renewal_time,1800},
+               				{rebinding_time,3000},
+               				{subnet_mask,{255,255,254,0}},
+               				{dns_server,{192,168,1,1}},
+               				{domain_name,"uah.es"},
+               				{router,{10,10,1,254}}]}
+		[addr_pool_srv_2]: Initiating pool from file ./data/pool1.dat..
+			POOL {name,"Universidad"}
+			POOL {range,{192,168,1,2},{192,168,1,253}}
+			POOL {options,[{lease_time,3600},
+               				{renewal_time,1800},
+               				{rebinding_time,3000},
+               				{subnet_mask,{255,255,255,0}},
+               				{broadcast_address,{192,168,1,255}},
+               				{dns_server,{192,168,1,1}},
+               				{domain_name,"uah.es"},
+               				{router,{192,168,1,254}}]}
+		fsm_cache_sup: Init..
+		fsm_cache_srv: Init..
+		fsm_dyn_sup: Init..
+		middleman_sup: Init.. I got 4 children to spawn
+		middleman_srv_1: Init..
+		middleman_srv_2: Init..
+		middleman_srv_3: Init..
+		middleman_srv_4: Init..
+		network_sup: Init..
+		udp_driver_srv: Init..
+		udp_driver_srv: I got 4 middleman pids..
+		udp_driver_srv: Opening UPD port 9000..
+		Application started...
+
+		....
+
+		[MAIN] Application Timeout
+		Application stopped...
+
 
 
 
