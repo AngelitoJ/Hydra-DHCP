@@ -19,7 +19,7 @@ start(_StartType, StartArgs) ->
    {ok, CmdlineOpts} = application:get_env(cmdline_options),    %% recover Opts from the enviroment
    AppOptions = [{start_args,StartArgs}|CmdlineOpts],           %% Combine start aargs with cmdline options
 
-   case dhcp_server_sup:start_link(AppOptions) of
+   case top_sup:start_link(AppOptions) of
    {ok, Pid} ->
        io:format("Application started...\n\n"),
       {ok, Pid};
