@@ -32,8 +32,8 @@ init(Opts) ->
 
     {ok, { {rest_for_one, 5, 10},
     							[
-    								 ?CHILDWRK(dora_cache_srv, Opts)
-    								,?CHILDSUP(dora_dyn_sup,  Opts)
+    								 ?CHILDWRK(console_srv, Opts)
+    								,?CHILDSUP(ets_master_srv,  Opts)
     							]} 
     							}.
 
