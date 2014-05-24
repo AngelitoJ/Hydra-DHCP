@@ -1,7 +1,7 @@
 %% Hydra DHCP Server project
 %% (C) 2014 Angel J. Alvarez Miguel
 
--module(dhcp_server_sup).
+-module(top_sup).
 
 -behaviour(supervisor).
 
