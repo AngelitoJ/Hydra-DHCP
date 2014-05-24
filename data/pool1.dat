@@ -1,16 +1,16 @@
 { pooldata,
 		{simplepool, [
-						 {name, "Universidad"}
-        				,{range, {192,168,1,2}, {192,168,1,253}}
-						,{options, [ 
-					 		 {lease_time, 3600}
-          					,{renewal_time, 1800}
-          					,{rebinding_time, 3000}
-          					,{subnet_mask, {255, 255, 255, 0}}
-          					,{broadcast_address, {192, 168, 1, 255}}
-          					,{dns_server, {192, 168, 1, 1}}
-          					,{domain_name, "uah.es"}
-          					,{router, {192, 168, 1, 254}}
-          					]}
-					 ]}
+						       {name, "Universidad"}
+        				  ,{range, {192,168,1,2}, {192,168,1,253}}
+						      ,{options, [ 
+					 		                  {lease_time, 3600}
+          					           ,{renewal_time, 1800}
+          					           ,{rebinding_time, 3000}
+          					           ,{subnet_mask, {255, 255, 255, 0}}
+          					           ,{broadcast_address, {192, 168, 1, 255}}
+          					           ,{dns_server, {192, 168, 1, 1}}
+          					           ,{domain_name, "uah.es"}
+          					           ,{router, {192, 168, 1, 254}}
+          					         ]}
+					       ]}
         }.
