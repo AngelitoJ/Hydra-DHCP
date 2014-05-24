@@ -108,7 +108,7 @@ wait_for_app() ->
     wait_for_app(infinity).
 
 wait_for_app(Timeout) ->
-    erlang:monitor(process,dhcp_server_sup),
+    erlang:monitor(process,top_sup),
     receive
         {'DOWN', _, process, Pref, Reason} ->
             io:format("[MAIN] Application supervisor ~w terminated, with cause: ~p\n",[Pref,Reason]);

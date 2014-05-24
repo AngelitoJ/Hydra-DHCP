@@ -2,7 +2,7 @@
 %% (C) 2014 Angel J. Alvarez Miguel
 
 
--module(fsm_dyn_sup).
+-module(dora_dyn_sup).
 
 -behaviour(supervisor).
 

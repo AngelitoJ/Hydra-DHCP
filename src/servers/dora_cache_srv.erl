@@ -1,7 +1,7 @@
 %% Hydra DHCP Server project
 %% (C) 2014 Angel J. Alvarez Miguel
 
--module(fsm_cache_srv).
+-module(dora_cache_srv).
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
 

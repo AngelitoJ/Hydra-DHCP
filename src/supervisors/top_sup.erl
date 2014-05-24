@@ -30,7 +30,7 @@ init(Opts) ->
     ChildrenSpec = [ 
                       ?CHILDWRK(ets_master_srv, Opts)  %% ETS master server, the heir of all ets tables, I hope it never dies..
                      ,?CHILDSUP(addr_pool_sup,  Opts)  %% Address pool servers supervisor
-                     ,?CHILDSUP(fsm_cache_sup,  Opts)  %% cache and sup for finite state machines.
+                     ,?CHILDSUP(dora_cache_sup,  Opts)  %% cache and sup for finite state machines.
                      ,?CHILDSUP(middleman_sup,  Opts)  %% Middleman pool (coding,decoding and fingerprinting) supervisor
                      ,?CHILDSUP(network_sup,    Opts)  %% Network components supervisor
                     ],

@@ -2,7 +2,7 @@
 %% (C) 2014 Angel J. Alvarez Miguel
 
 
--module(fsm_cache_sup).
+-module(dora_cache_sup).
 
 -behaviour(supervisor).
 
@@ -32,7 +32,7 @@ init(Opts) ->
 
     {ok, { {rest_for_one, 5, 10},
     							[
-    								 ?CHILDWRK(fsm_cache_srv, Opts)
-    								,?CHILDSUP(fsm_dyn_sup,  Opts)
+    								 ?CHILDWRK(dora_cache_srv, Opts)
+    								,?CHILDSUP(dora_dyn_sup,  Opts)
     							]} }.
 
