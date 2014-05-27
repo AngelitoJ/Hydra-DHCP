@@ -19,7 +19,7 @@
          terminate/2, code_change/3]).
 
 
--record(pool_state, {
+-record(st, {
 						 id        = undefined
 						,filepath  = undefined
 						,data      = []         %% A property list containing pool attributes
@@ -42,7 +42,7 @@ init(Opts) ->
 	Id                                  = proplists:get_value(who_you_are,Opts),
 	PoolFile                            = proplists:get_value(pool_file,Opts),
 	Data                                = load_pool(PoolFile),
-    NewState                            = #pool_state{ id = Id, filepath = PoolFile, data = Data},
+    NewState                            = #st{ id = Id, filepath = PoolFile, data = Data},
 
 	io:format("[~p]: Initiating pool from file ~ts..\n", [Id,PoolFile]),
 
