@@ -64,6 +64,12 @@ Basic application architecture
 	4. ADDR_POOL_SRV
 		- One per addr pool configured, manages client leases and pool policies.
 
+	5. Miscelaneous servers.
+		- Console service: frontend offering services to print all the various structures on the application.
+		- Table heir:  Responsible for ets tables used across the various workers.
+
+
+
 SYSTEM REQUIREMENTS
 ===================
 
