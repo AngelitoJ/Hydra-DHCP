@@ -86,7 +86,7 @@ handle_info({udp, _Socket, Ip, _SrcPort, Packet}, #driver_state{ pool = Pool} = 
 %% Handle a DOWN message from a diying middlemen and delete it drom the pool list.
 handle_info({'DOWN', _, process, Pid, Reason}, #driver_state{ pool = Pool} = State) ->
     io:format("~p: Hey! middleman ~p terminated with reason: ~p..\n", [?MODULE,Pid,Reason]),
-    NewState = State#driver_state{ pool = pool_remove_pid(Pool, Pid) },
+    NewState = State#driver_state{ pool = pool:remove_pid(Pool, Pid) },
     {noreply,  NewState };
 
 handle_info(Info, State) ->
@@ -109,14 +109,14 @@ discover_and_setup_pool() ->
     [Head |Tail] ->
       Pids = lists:map(fun({_, Pid, _, _}) -> erlang:monitor(process, Pid), Pid end, [Head|Tail]),
       io:format("~p: I got ~p middleman pids..\n", [?MODULE,length(Pids)]),
-      {ok, pool_new(Pids)};
+      {ok, pool:new(Pids)};
     _ ->
-      {error, pool_new()}
+      {error, pool:new()}
   end.
 
 %% send a msg to a Pid from the Pool, recycle the pool if empty, return the new pool
 send_to_pool(Msg,Pool) ->
-  case pool_get_next(Pool) of
+  case pool:get_next(Pool) of
     empty ->                                     %% the pool is empty!
       io:format("~p: my middleman pool is empty, i'm getting a new one from the supervisor\n", [?MODULE]),
       {ok, NewPool} = discover_and_setup_pool(),       %% get a new pool
@@ -139,48 +139,5 @@ setup_udp_port(Opts) ->
                                     ]),
   Socket.
 
-%% make a new pool of Pids
-pool_new()                        -> pool_new([]).
-pool_new([])                      -> empty;
-pool_new(Pids) when is_list(Pids) -> {[],Pids}.
-
-%% POOL: get next Pid in round-robin fashion or nothing if no available Pids
-pool_get_next(empty)               -> empty;   
-pool_get_next({Used, []})          -> pool_get_next({[],Used});      %% Recycle the used list and try again
-pool_get_next({Used, [Next|Rest]}) -> {Next, {[Next|Used], Rest}}.         %% Return the next Pid and cycle the list 
-
-
-%% delete a faulty Pid from the available list of Pids and return the new pool or 'empty'
-pool_remove_pid({Used, Rest},Pid) when is_pid(Pid) ->
-  case {Used -- [Pid], Rest -- [Pid]} of
-    {[],[]}       -> empty;
-    {List1,List2} -> {List1,List2}
-  end.
-
--ifdef(TEST).
-
--include_lib("eunit/include/eunit.hrl").
-
-pool_test_() -> { inparallel, [
-                    %% empty new
-                   ?_assertEqual(empty
-                                    ,pool_new())
-                    %% empty list new
-                  ,?_assertEqual(empty
-                                    ,pool_new([]))
-                    %% non empty list new
-                  ,?_assertEqual({[], [one,two,three]}
-                                    ,pool_new([one,two,three]))
-                    %% pool get next
-                  ,?_assertEqual({one, {[one],[two,three]}}
-                                    ,pool_get_next(pool_new([one,two,three])) )
-                    %% pool get next with list recycling
-                  ,?_assertEqual({one, {[one],[two,three]}}
-                                    ,pool_get_next( {[one,two,three], []} ) )
-                    %% pool remove
-                  ,?_assertEqual({[one], [three]}, pool_remove_pid({[one,self()], [three]},self()) )
-                ]}.
-
--endif.
 
 
