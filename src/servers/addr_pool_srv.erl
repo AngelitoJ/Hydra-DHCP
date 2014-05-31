@@ -134,7 +134,7 @@ new_ets_table(Name) ->
 											,public
 											,{keypos, #address.ip}
 											,{heir, Pid, {name = Name}}
-											]),
+											])
 	end.
 
 
