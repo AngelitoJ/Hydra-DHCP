@@ -4,13 +4,13 @@
 
 
 %% make a new pool of Pids
-new()                        -> pool_new([]).
+new()                        -> new([]).
 new([])                      -> empty;
 new(Pids) when is_list(Pids) -> {[],Pids}.
 
 %% POOL: get next Pid in round-robin fashion or nothing if no available Pids
 get_next(empty)               -> empty;   
-get_next({Used, []})          -> pool_get_next({[],Used});      %% Recycle the used list and try again
+get_next({Used, []})          -> get_next({[],Used});      %% Recycle the used list and try again
 get_next({Used, [Next|Rest]}) -> {Next, {[Next|Used], Rest}}.         %% Return the next Pid and cycle the list 
 
 
