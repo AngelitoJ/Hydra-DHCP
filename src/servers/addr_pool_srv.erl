@@ -18,11 +18,38 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+-record(subnet,	{                               %% a subnet is the basic bloc of Ip addresses allocation
+					 network                    %% base network of this subnet
+					,netmask                    %% netmask to generate the subnet
+					,range                      %% range of IPs available in this subnet
+					,excluded                   %% excluded Ips in this subnet
+					,options                    %% Options available in this subnet
+				}).
 
--record(st, {
-						 id        = undefined
-						,filepath  = undefined
+-record(host, {                                 %% A host record describe a client Id holding a certain IP address
+					 id                         %% Client Id
+					,ip                         %% Address allocated to this client Id
+				}).
+
+-record(address, {                              %% An address record represents this basic allocation unit
+					 ip                         %% IP address
+					,status                     %% Status = AVAILABLE | OFFERED | ALLOCATED | EXPIRED..
+					,timer = undefined          %% Expiration timer
+					,options = undefined        %% Options to this allocation
+				}).
+
+-record(lease, {                                %% A Lease record describes a DHCP lease
+					 clientid                   %% Client Id holding the lease
+					,ip                         %% Address leased
+					,expires                    %% Expiration timer
+				}).
+
+-record(st, {                                   %% Address Pool server state record 
+						 id        = undefined  %% Id of this pool
+						,filepath  = undefined  %% Path to pool data
 						,data      = []         %% A property list containing pool attributes
+						,pool      = undefined  %% A ets table holding address allocations.
+						,leases    = undefined  %% A dets table holding leases. 
 					}).
 
 %% ------------------------------------------------------------------
@@ -52,6 +79,22 @@ init(Opts) ->
     {ok, NewState}.
 
 
+handle_call({allocate, Clientid}, _From, State) ->
+    {reply, ok, State}.
+handle_call({reserve, Clientid}}, _From, State) ->
+    {reply, ok, State}.
+handle_call({extend, Clientid}}, _From, State) ->
+    {reply, ok, State}.
+handle_call({decline, Clientid}}, _From, State) ->
+    {reply, ok, State}.
+handle_call({release, Clientid}}, _From, State) ->
+    {reply, ok, State}.
+handle_call({verify, Clientid}} , _From, State) ->
+    {reply, ok, State}.
+handle_call({info, Clientid}}, _From, State) ->
+    {reply, ok, State}.
+
+
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -77,3 +120,5 @@ load_pool(File) ->
 		{simplepool, PoolOpts} -> PoolOpts;
 		_ -> error("pool type not supported")
 	end.
+
+
