@@ -80,19 +80,19 @@ init(Opts) ->
 
 
 handle_call({allocate, Clientid}, _From, State) ->
-    {reply, ok, State}.
-handle_call({reserve, Clientid}}, _From, State) ->
-    {reply, ok, State}.
-handle_call({extend, Clientid}}, _From, State) ->
-    {reply, ok, State}.
-handle_call({decline, Clientid}}, _From, State) ->
-    {reply, ok, State}.
-handle_call({release, Clientid}}, _From, State) ->
-    {reply, ok, State}.
-handle_call({verify, Clientid}} , _From, State) ->
-    {reply, ok, State}.
-handle_call({info, Clientid}}, _From, State) ->
-    {reply, ok, State}.
+    {reply, ok, State};
+handle_call({reserve, Clientid}, _From, State) ->
+    {reply, ok, State};
+handle_call({extend, Clientid}, _From, State) ->
+    {reply, ok, State};
+handle_call({decline, Clientid}, _From, State) ->
+    {reply, ok, State};
+handle_call({release, Clientid}, _From, State) ->
+    {reply, ok, State};
+handle_call({verify, Clientid} , _From, State) ->
+    {reply, ok, State};
+handle_call({info, Clientid}, _From, State) ->
+    {reply, ok, State};
 
 
 handle_call(_Request, _From, State) ->
@@ -120,5 +120,24 @@ load_pool(File) ->
 		{simplepool, PoolOpts} -> PoolOpts;
 		_ -> error("pool type not supported")
 	end.
+
+%init_alloc_table() ->
+
+
+
+%% Make a new addresses table (or recover it from the table heir)
+new_ets_table(Name) ->
+	case gen_server:call(ets_master_srv, {get, Name}) of
+		{ok, Tid}         -> Tid;
+		{not_found, Pid}  -> ets:new(Name, [
+											 named_table
+											,public
+											,{keypos, #address.ip}
+											,{heir, Pid, {name = Name}}
+											]),
+	end.
+
+
+
 
 

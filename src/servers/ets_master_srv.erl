@@ -40,7 +40,11 @@ init(Args) ->
 
 %% Tell a process the Tid of a table (if we know that)
 handle_call({get, Name}, From, #st{ tables = Tables} = State) ->
-	{reply, dict:find(Name, Tables), State};
+	Result = case dict:find(Name, Tables) of
+			{ok, Value} -> {ok, Value};
+			error       -> {not_found, self()}
+			end,
+	{reply, Result, State};
 
 %% Remove a Table in case the process wants to close it
 handle_call({remove, Name}, From, #st{ tables = Tables} = State) ->	
