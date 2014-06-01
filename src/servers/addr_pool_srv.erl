@@ -18,6 +18,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+-include("address_tools.hrl").
+
 -record(subnet,	{                               %% a subnet is the basic bloc of Ip addresses allocation
 					 network                    %% base network of this subnet
 					,netmask                    %% netmask to generate the subnet
@@ -47,7 +49,7 @@
 -record(st, {                                   %% Address Pool server state record 
 						 id        = undefined  %% Id of this pool
 						,filepath  = undefined  %% Path to pool data
-						,data      = []         %% A property list containing pool attributes
+						,options   = undefined  %% A property list containing pool attributes
 						,pool      = undefined  %% A ets table holding address allocations.
 						,leases    = undefined  %% A dets table holding leases. 
 					}).
@@ -68,15 +70,11 @@ start_link(Opts) ->
 init(Opts) ->
 	Id                                  = proplists:get_value(who_you_are,Opts),
 	PoolFile                            = proplists:get_value(pool_file,Opts),
-	Data                                = load_pool(PoolFile),
-    NewState                            = #st{ id = Id, filepath = PoolFile, data = Data},
+	State                               = load_pool(#st{ id = Id, filepath = PoolFile}),
 
 	io:format("[~p]: Initiating pool from file ~ts..\n", [Id,PoolFile]),
 
-	lists:foreach(fun(I) -> io:format("POOL ~p\n",[I]) end,
-					Data),
-
-    {ok, NewState}.
+    {ok, State}.
 
 
 handle_call({allocate, Clientid}, _From, State) ->
@@ -114,28 +112,65 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-load_pool(File) ->
+load_pool(#st{ filepath = File } = State) ->
 	{ok, [{pooldata,PoolData}|_]} = file:consult(File),
 	case PoolData of
-		{simplepool, PoolOpts} -> PoolOpts;
+		{simplepool, PoolOpts} -> lists:foldl(
+												 fun init_pool/2
+												,State
+												,PoolOpts
+											);
 		_ -> error("pool type not supported")
 	end.
 
-%init_alloc_table() ->
-
-
-
 %% Make a new addresses table (or recover it from the table heir)
-new_ets_table(Name) ->
-	case gen_server:call(ets_master_srv, {get, Name}) of
-		{ok, Tid}         -> Tid;
-		{not_found, Pid}  -> ets:new(Name, [
-											 named_table
-											,public
-											,{keypos, #address.ip}
-											,{heir, Pid, {name = Name}}
+init_pool({name, Name}, #st{ id = Id } = State) ->
+	Table = list_to_atom(Name),
+	io:format("[~p]: Creating ETS pool named ~p..\n", [Id,Table]),
+	Tid = case gen_server:call(ets_master_srv, {get, Table}) of
+		  {ok, Value}       -> Value;
+		  {not_found, Pid}  -> ets:new(Table, [
+												 public
+												,{keypos, #address.ip}
+												,{heir, Pid, {name, Table}}
 											])
-	end.
+	      end,
+	State#st{ pool = Tid };
+
+%% Populate the ETS table with free addresses 		
+init_pool({range, Start, End}, #st{ id = Id, pool = Tid } = State) ->
+	io:format("[~p]: Populationg Pool from ~p to ~p..\n", [Id,Start,End]),
+	populate(Tid, free, Start, End),
+	State;
+
+%% record the pool client options
+init_pool({options, Options}, #st{ id = Id } = State) ->
+	lists:foreach(
+					fun(I) -> io:format("[~p]: option: ~p\n",[Id, I]) end,
+					Options
+				),
+	State#st{ options = Options };
+
+init_pool(Tuple,#st{ id = Id } = State) ->
+	io:format("[~p]: Unknow Pool setting ~p:\n", [Id,Tuple]),
+	State.
+
+%% Populate the given table with address records on a given status, use explicit tail recursion to avoid building a large list
+populate(Tid, Status, Addr, Addr) ->
+	io:format("Addres: ~p Status: ~p\n",[Addr,Status]),
+	ets:insert(Tid, #address{
+								 ip     = Addr
+								,status = Status
+							});
+populate(Tid, Status, Addr, End) ->
+	io:format("Addres: ~p Status: ~p\n",[Addr,Status]),
+	ets:insert(Tid, #address{
+								 ip     = Addr
+								,status = Status
+							}),
+	populate(Tid, Status, ipv4_succ(Addr), End).
+
+
 
 
 
