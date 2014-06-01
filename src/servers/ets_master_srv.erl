@@ -33,7 +33,7 @@ start_link(Opts) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(Args) ->
+init(_Opts) ->
 	io:format("~p: Init..\n", [?MODULE]),
 
     {ok, #st{ tables = dict:new() }}.
@@ -58,12 +58,12 @@ handle_cast(_Msg, State) ->
 
 
 %% Gain table ownership when some process screws up. Heirdata must contain the table Name
-handle_info({'ETS-TRANSFER', Tid, FromPid, {name = Name}}, #st{ tables = Tables } = State) ->
+handle_info({'ETS-TRANSFER', Tid, _FromPid, {name , Name}}, #st{ tables = Tables } = State) ->
 	{noreply, State#st{ tables = dict:update(Name, fun(X) -> X end, Tid, Tables)}};  
 
 %% Failed attept to gain a table ownership because we dont know the table's name 
-handle_info({'ETS-TRANSFER', Tid, FromPid, Whatever}, State) ->
-	io:format("[TABLE MASTER]: Sorry!, process ~p died, but we can inherit its table\n", [FromPid]),
+handle_info({'ETS-TRANSFER', _Tid, FromPid, _Whatever}, State) ->
+	io:format("[TABLE MASTER]: Sorry!, process ~p died, but we can not inherit its table\n", [FromPid]),
 	{noreply, State};  
 
 handle_info(Info, State) ->
