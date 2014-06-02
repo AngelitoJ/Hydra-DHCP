@@ -157,13 +157,13 @@ init_pool(Tuple,#st{ id = Id } = State) ->
 
 %% Populate the given table with address records on a given status, use explicit tail recursion to avoid building a large list
 populate(Tid, Status, Addr, Addr) ->
-%%	io:format("Addres: ~p Status: ~p\n",[Addr,Status]),
+	io:format("Addres: ~p Status: ~p\n",[Addr,Status]),
 	ets:insert(Tid, #address{
 								 ip     = Addr
 								,status = Status
 							});
 populate(Tid, Status, Addr, End) ->
-%%	io:format("Addres: ~p Status: ~p\n",[Addr,Status]),
+	io:format("Addres: ~p Status: ~p\n",[Addr,Status]),
 	ets:insert(Tid, #address{
 								 ip     = Addr
 								,status = Status
