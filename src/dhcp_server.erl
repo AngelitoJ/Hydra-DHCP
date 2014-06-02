@@ -13,17 +13,19 @@ option_specs() ->
     {    
 		%%List of getopt descriptors {Name, ShortOpt, LongOpt, ArgSpec, HelpMsg}
         [
-            {help,        $?,        "help",        undefined,                    "Show this help."},
-            {debug,       $d,        "debug",       {integer, 0},                 "Show debug info."},
-            {verbose,     $v,        "verbose",     undefined,                    "Show all actions performed."},
-            {version,     $V,        "version",     undefined,                    "Show software version."},
-            {procs,       $P,        "cores",       {integer, Procesos },         "Number of workers (default 2*core)."}
+             {help,        $?,        "help",        undefined,                    "Show this help."}
+            ,{debug,       $d,        "debug",       {integer, 0},                 "Show debug info."}
+            ,{verbose,     $v,        "verbose",     undefined,                    "Show all actions performed."}
+            ,{version,     $V,        "version",     undefined,                    "Show software version."}
+            ,{procs,       $P,        "cores",       {integer, Procesos },         "Number of workers (default 2*core)."}
+            ,{timeout,     $T,        "timeout",     {integer, 60},                "Default app timeout in seconds."}
         ]
         %% args processing funs required for some options
         ,[
              fun check_help/1          % check for help requests at the command line.
             ,fun check_version/1       % check for software version.
             ,fun check_debug/1         % check for debug level among posible values.
+            ,fun check_timeout/1       % Application Timeout
         ]
     }.
 
@@ -86,15 +88,16 @@ app_setup(AppName,Args) ->
 
 -spec app_main(atom(),[tuple()]) -> none().
 app_main(AppName,Options) ->
-   {A1,A2,A3} = now(),                                              %% get random seed from current time
-   random:seed(A1, A2, A3),                                         %% feed the standard random number generator
+    {A1,A2,A3} = now(),                                              %% get random seed from current time
+    random:seed(A1, A2, A3),                                         %% feed the standard random number generator
+    Timeout = proplists:get_value(timeout,Options),                  %% Get the timeout requested (30 is the default). 
 
    ok = application:set_env(AppName,cmdline_options,Options,5000),  %% Store options so app will get them on startup
 
    case application:start(AppName) of                               %% start the application
 
    ok ->                                                            %% ok, wait until we are done and then shutdown the app
-      wait_for_app(60000),
+      wait_for_app(Timeout*1000),
       ok = application:stop(AppName);
 
    Other ->                                                         %% something went wrong..
@@ -150,6 +153,16 @@ check_debug(Opts) ->
     case (Level < 0) or (Level > 3) of                       %% Is requested level between bounds?
         true ->  [{debug,0} | proplists:delete(debug,Opts)]; %% No, correct it and replace the wrong bits. 
         false -> Opts                                        %% Yes, return the original list.
+    end.
+
+%% Check for a especific timeout (usefull for testing)
+
+-spec check_timeout([any()]) -> [any()].
+check_timeout(Opts) ->
+    Timeout = proplists:get_value(timeout,Opts),                       %% Get the timeout requested (30 is the default). 
+    case (Timeout == undefined) or (Timeout < 0) or (Timeout > 300) of %% Is requested level between bounds?
+        true ->  [{timeout,30} | proplists:delete(timeout,Opts)];      %% No, correct it and replace the wrong bits. 
+        false -> Opts                                                  %% Yes, return the original list.
     end.
 
 -ifdef(TEST).
