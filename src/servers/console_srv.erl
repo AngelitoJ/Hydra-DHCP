@@ -29,10 +29,10 @@ start_link(Opts) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(Args) ->
-  io:format("~p: Init with Args: ~p\n", [?MODULE,Args]),
+init(_Args) ->
+  io:format("[~p]: Init... \n", [?SERVER]),
 
-    {ok, Args}.
+    {ok, []}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
