@@ -68,7 +68,7 @@ init(Opts) ->
     {ok, State}.
 
 
-%% Look for a suitable address for the client (client can provide one) and reserve this address.
+%% Look for a suitable free address for the client (client can request one) and mark it as offered.
 handle_call({reserve, ClientId, RequestedIP}, _From, State) ->
     Result = case select_address(State, ClientId, RequestedIP) of
         {ok, Address}   -> reserve_address(State, Address, ClientId);
@@ -76,8 +76,14 @@ handle_call({reserve, ClientId, RequestedIP}, _From, State) ->
     end,
     {reply, Result, State};
 
-handle_call({allocate, _ClientId}, _From, State) ->
-    {reply, ok, State};
+%% Mark an address as allocated. Address must be in offered state 
+handle_call({allocate, ClientId, RequestedIP}, _From, State) ->
+    Result = case pool_lookup(State, RequestedIP) of
+        {offered, Address} -> allocate_address(State, Address, ClientId);
+        {_, _Address}      -> {error, "Address is not offered."};
+        not_found          -> {error, "Address was not found."}
+    end,
+{reply, Result, State};
 
 
 handle_call({extend, _ClientId}, _From, State) ->
@@ -230,9 +236,9 @@ reserve_address(State, Address, ClientId) when is_record(Address, address) ->
 
     {ok, Address#address.ip, Address#address.options}.
 
-%% Mark an address as allocated to a Client
-allocate_address(State, ClientId, IP, Options) ->
-    allocate_address(State, #address{ip = IP, options = Options}, ClientId).
+%% Mark an IP address as allocated to a Client.
+allocate_address(State, ClientId, RequestedIP, Options) ->
+    allocate_address(State, #address{ip = RequestedIP, options = Options}, ClientId).
 
 allocate_address(State, Address, ClientId) ->
     case proplists:get_value(leasetime, Address#address.options, not_found) of
