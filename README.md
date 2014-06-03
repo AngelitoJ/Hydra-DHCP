@@ -21,10 +21,10 @@ The repository is registered on Travis-ci, so a green status means all software 
 We will provide a stable release on reaching v 1.0.
 
 Component status legend:
-	SETUP: The component basic lyout is done, some bare functionalty but is doesn't work as designed yet.
-	WIP  : The component has several aspects implemented, and its receiving new features.
-	DONE : The component is finished[1] and seems to perform as designed but can contain obvious bugs.
-	QA   : The component is subject to major unit testing
+SETUP: The component basic lyout is done, some bare functionalty but is doesn't work as designed yet.
+WIP  : The component has several aspects implemented, and its receiving new features.
+DONE : The component is finished[1] and seems to perform as designed but can contain obvious bugs.
+QA   : The component is subject to major unit testing
 
 
 - Escript fronted                 : DONE  
