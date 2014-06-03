@@ -28,7 +28,6 @@
 -record(address, {                              %% An address record represents this basic allocation unit
                      ip                         %% IP address
                     ,status                     %% Status = AVAILABLE | OFFERED | ALLOCATED | EXPIRED..
-                    ,timer        = undefined   %% Expiration timer
                     ,options      = undefined   %% Options to this allocation
                 }).
 
@@ -77,9 +76,10 @@ handle_call({reserve, ClientId, RequestedIP}, _From, State) ->
     end,
     {reply, Result, State};
 
-
 handle_call({allocate, _ClientId}, _From, State) ->
     {reply, ok, State};
+
+
 handle_call({extend, _ClientId}, _From, State) ->
     {reply, ok, State};
 handle_call({decline, _ClientId}, _From, State) ->
@@ -125,7 +125,7 @@ load_pool(#st{ filepath = File } = State) ->
 %% Make a new addresses table pool (or recover it from the table heir) and a open its leases file (or create a new one)
 init_pool({name, Name}, #st{ id = Id } = State) ->
     ETSName  = list_to_atom(Name),
-    DETSFile = Name ++ "_leases",
+    DETSFile = Name ++ ".leases",
     DETSName = list_to_atom(DETSFile),
 
     io:format("[~p]: Creating ETS pool named ~p..\n", [Id,ETSName]),
@@ -214,7 +214,7 @@ select_address(#st{ options = Options } = State, ClientId, RequestedIP) ->
                            end
     end.
 
-%% Mark an address as offered and commit to leases file (should'nt be commite by now, I have to check this out)
+%% Mark an address as offered and commit to leases file (should'nt be committed by now, I have to check this out)
 reserve_address(State, Address, ClientId) when is_record(Address, address) ->
     pool_insert(State, Address#address{status = offered}),
     
@@ -230,6 +230,21 @@ reserve_address(State, Address, ClientId) when is_record(Address, address) ->
 
     {ok, Address#address.ip, Address#address.options}.
 
+%% Mark an address as allocated to a Client
+allocate_address(State, ClientId, IP, Options) ->
+    allocate_address(State, #address{ip = IP, options = Options}, ClientId).
+
+allocate_address(State, Address, ClientId) ->
+    case proplists:get_value(leasetime, Address#address.options, not_found) of
+    not_found -> {error, "Lease time not configured."};
+    {lease_time, LeaseTime} ->
+        Now     = calendar:datetime_to_gregorian_seconds({date(), time()}),
+        Expires = Now + LeaseTime,
+        Lease   = #lease{ clientid = ClientId, ip = Address#address.ip, expires = Expires},
+        leases_insert(State, Lease),
+        pool_insert(State, Address#address{status = allocated}),
+        {ok, Address#address.ip, Address#address.options }
+    end.
 
 
 %% Lookup a client lease and tag it accordingly ok | expired | not_found
@@ -255,7 +270,7 @@ pool_lookup(State, Ip) ->
         [Address] when Address#address.status == offered -> {offered, Address};
         _                                                -> not_found
     end.
-%% Insert or replace an addres objet in the pool
+%% Insert or replace an addres object in the pool
 pool_insert(State, Address) when is_record(Address, address) ->
     ets:insert(State#st.pool, Address).
 

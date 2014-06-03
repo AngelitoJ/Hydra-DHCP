@@ -8,7 +8,4 @@ deps
 erl_crash.dump
 dhcp_server
 .build
-
-Universidad2_leases
-
-Universidad_leases
+*.leases
