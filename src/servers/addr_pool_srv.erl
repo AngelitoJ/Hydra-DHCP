@@ -20,14 +20,6 @@
 
 -include("address_tools.hrl").
 
--record(subnet,	{                               %% a subnet is the basic bloc of Ip addresses allocation
-					 network                    %% base network of this subnet
-					,netmask                    %% netmask to generate the subnet
-					,range                      %% range of IPs available in this subnet
-					,excluded                   %% excluded Ips in this subnet
-					,options                    %% Options available in this subnet
-				}).
-
 -record(host, {                                 %% A host record describe a client Id holding a certain IP address
 					 id                         %% Client Id
 					,ip                         %% Address allocated to this client Id
@@ -36,8 +28,8 @@
 -record(address, {                              %% An address record represents this basic allocation unit
 					 ip                         %% IP address
 					,status                     %% Status = AVAILABLE | OFFERED | ALLOCATED | EXPIRED..
-					,timer = undefined          %% Expiration timer
-					,options = undefined        %% Options to this allocation
+					,timer        = undefined   %% Expiration timer
+					,options      = undefined   %% Options to this allocation
 				}).
 
 -record(lease, {                                %% A Lease record describes a DHCP lease
@@ -70,26 +62,33 @@ start_link(Opts) ->
 init(Opts) ->
 	Id                                  = proplists:get_value(who_you_are,Opts),
 	PoolFile                            = proplists:get_value(pool_file,Opts),
-	State                               = load_pool(#st{ id = Id, filepath = PoolFile}),
 
 	io:format("[~p]: Initiating pool from file ~ts..\n", [Id,PoolFile]),
+	State                               = load_pool(#st{ id = Id, filepath = PoolFile}),
+	
+	{ok, State}.
 
-    {ok, State}.
+
+%% Look for a suitable address for the client (client can provide one) and reserve this address.
+handle_call({reserve, ClientId, RequestedIP}, _From, State) ->
+	Result = case select_address(State, ClientId, RequestedIP) of
+		{ok, Address}   -> reserve_address(State, Address, ClientId);
+		{error, Reason} -> {error, Reason}
+	end,
+	{reply, Result, State};
 
 
-handle_call({allocate, Clientid}, _From, State) ->
+handle_call({allocate, _ClientId}, _From, State) ->
     {reply, ok, State};
-handle_call({reserve, Clientid}, _From, State) ->
+handle_call({extend, _ClientId}, _From, State) ->
     {reply, ok, State};
-handle_call({extend, Clientid}, _From, State) ->
+handle_call({decline, _ClientId}, _From, State) ->
     {reply, ok, State};
-handle_call({decline, Clientid}, _From, State) ->
+handle_call({release, _ClientId}, _From, State) ->
     {reply, ok, State};
-handle_call({release, Clientid}, _From, State) ->
+handle_call({verify, _ClientId} , _From, State) ->
     {reply, ok, State};
-handle_call({verify, Clientid} , _From, State) ->
-    {reply, ok, State};
-handle_call({info, Clientid}, _From, State) ->
+handle_call({info, _ClientId}, _From, State) ->
     {reply, ok, State};
 
 
@@ -123,19 +122,29 @@ load_pool(#st{ filepath = File } = State) ->
 		_ -> error("pool type not supported")
 	end.
 
-%% Make a new addresses table (or recover it from the table heir)
+%% Make a new addresses table pool (or recover it from the table heir) and a open its leases file (or create a new one)
 init_pool({name, Name}, #st{ id = Id } = State) ->
-	Table = list_to_atom(Name),
-	io:format("[~p]: Creating ETS pool named ~p..\n", [Id,Table]),
-	Tid = case gen_server:call(ets_master_srv, {get, Table}) of
+	ETSName  = list_to_atom(Name),
+	DETSFile = Name ++ "_leases",
+	DETSName = list_to_atom(DETSFile),
+
+	io:format("[~p]: Creating ETS pool named ~p..\n", [Id,ETSName]),
+	%% Ask Table heir if table already exists, create a new one if needed and set the heir
+	Tidpool = case gen_server:call(ets_master_srv, {get, ETSName}) of     
 		  {ok, Value}       -> Value;
-		  {not_found, Pid}  -> ets:new(Table, [
+		  {not_found, Pid}  -> ets:new(ETSName, [                            
 												 public
 												,{keypos, #address.ip}
-												,{heir, Pid, {name, Table}}
+												,{heir, Pid, {name, ETSName}}
 											])
 	      end,
-	State#st{ pool = Tid };
+	%% Open de lease file or die..
+	{ok, Tidleases} = dets:open_file(DETSName, [
+							  					 {keypos, #lease.clientid}
+							 					,{file, DETSFile}
+											]),
+
+	State#st{ pool = Tidpool, leases =  Tidleases };
 
 %% Populate the ETS table with free addresses 		
 init_pool({range, Start, End}, #st{ id = Id, pool = Tid } = State) ->
@@ -169,6 +178,92 @@ populate(Tid, Status, Addr, End) ->
 								,status = Status
 							}),
 	populate(Tid, Status, ipv4_succ(Addr), End).
+
+
+%% Try to select the first free IP address available
+select_address(#st{ pool = Tid , options = Options }, _ClientId, {0, 0, 0, 0}) ->
+	case ets:match(Tid, #address{ ip = '$1', status = free }, 1) of
+		[Addr] -> {ok, #address{ ip = Addr, status = free, options = Options}};
+		[]     -> {error, "No address is available for this request"}
+	end;
+
+%% Try to select the client requested IP if posible.
+select_address(#st{ options = Options } = State, ClientId, RequestedIP) ->
+	Now = calendar:datetime_to_gregorian_seconds({date(), time()}),
+
+	case leases_lookup(State, ClientId, Now) of
+    	%% There is a active lease, we use it 
+		{ok, Lease}      -> {ok, #address{ip = Lease#lease.ip, options = Options}};
+
+		%% There is a expired lease, we have to check the pool    															
+		{expired, Lease} -> case pool_lookup(State, Lease#lease.ip) of
+							%% The address is free we can use it anyway
+							{free, Address}    -> {ok, Address#address{options = Options}};
+							%% The address is not free , we remove the lease and try again
+							_                  -> leases_remove(State, ClientId),
+												  select_address(State, ClientId, RequestedIP)
+							end;
+    	%% There is no lease we try to get a new address from the pool				
+		not_found        -> case pool_lookup(State, RequestedIP) of
+							%% the address is free we use it
+							{free, Address}    -> {ok, Address#address{ options = Options}};
+							%% the address is offered 
+							{offered, _Address} -> {error, "Address is offered"};
+							%% no address found we try any address free
+							not_found          -> select_address(State, ClientId, {0,0,0,0})
+						   end
+	end.
+
+%% Mark an address as offered and commit to leases file (should'nt be commite by now, I have to check this out)
+reserve_address(State, Address, ClientId) when is_record(Address, address) ->
+    pool_insert(State, Address#address{status = offered}),
+    
+    Now     = calendar:datetime_to_gregorian_seconds({date(), time()}),
+    Expires = Now + 300, %% 5 minutes ? I have to check this out
+    Lease   = #lease{ 
+    					 clientid = ClientId
+    					,ip       = Address#address.ip
+    					,expires  = Expires},
+    
+    leases_insert(State, Lease),
+
+
+    {ok, Address#address.ip, Address#address.options}.
+
+
+
+%% Lookup a client lease and tag it accordingly ok | expired | not_found
+leases_lookup(State, Id, Now) ->
+	case dets:lookup(State#st.leases, Id) of
+		[Lease] when Lease#lease.expires > Now -> {ok, Lease};
+		[Lease]                                -> {expired, Lease};		 
+		[]                                     -> not_found
+	end.
+
+%% Insert a new lease
+leases_insert(State, Lease) when is_record(Lease, lease) ->
+	ok = dets:insert(State#st.leases, Lease).
+
+%% delete a client lease
+leases_remove(State, Id) -> 
+	ok = dets:delete(State#st.leases, Id).
+
+%% Lookup a IP address and tag it accordingly free | offered | not_found
+pool_lookup(State, Ip) ->
+	case ets:lookup(State#st.pool, Ip) of
+		[Address] when Address#address.status == free    -> {free, Address};
+    	[Address] when Address#address.status == offered -> {offered, Address};
+    	_                                                -> not_found
+    end.
+%% Insert or replace an addres objet in the pool
+pool_insert(State, Address) when is_record(Address, address) ->
+	ets:insert(State#st.pool, Address).
+
+
+
+
+
+
 
 
 
