@@ -10,8 +10,35 @@ service featuring scalability and resilence thanks to the great OTP framework ca
 This is work in progress, yet a rebarized "shell" is provided from day one to manage the entire OTP application as a command-line
 Unix program, so for the most part you only need to follow the install instructions to get a single standalone "hydra-server" executable.
 
-*HOLD YOUR HORSES!!*  The important bits are missing (as Apr'14) but we hope to get the bare functionality soon...
-[![Build Status](https://travis-ci.org/AngelitoJ/Hydra-DHCP.svg?branch=master)](https://travis-ci.org/AngelitoJ/Hydra-DHCP) When build status is green is safe to clone the repository. We will provide also, stable releases as soon as posible.
+
+Project status
+===============
+
+[![Build Status](https://travis-ci.org/AngelitoJ/Hydra-DHCP.svg?branch=master)](https://travis-ci.org/AngelitoJ/Hydra-DHCP) 
+
+The repository is registered on Travis-ci, so a green status means all software compile and unit tests (if any) went fine.
+
+We will provide a stable release on reaching v 1.0.
+
+Component status legend:
+	SETUP: The component basic lyout is done, some bare functionalty but is doesn't work as designed yet.
+	WIP  : The component has several aspects implemented, and its receiving new features.
+	DONE : The component is finished[1] and seems to perform as designed but can contain obvious bugs.
+	QA   : The component is subject to major unit testing
+
+
+- Escript fronted                 : DONE  
+- Cross module get-opt            : DONE
+- Main OTP tree                   : DONE
+- Console server                  : SETUP
+- Table master                    : DONE
+- UDP Driver                      : SETUP
+- Middleman DHCP encoder / decoder: SETUP
+- DORA Cache manager              : SETUP
+- DORA DHCP State machine         : SETUP
+- Address Pool Server             : WIP  (Address selection and reservation)
+
+
 
 Brief Project roadmap
 ======================
