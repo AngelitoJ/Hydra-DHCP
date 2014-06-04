@@ -24,8 +24,9 @@
 -include("dhcp_messages.hrl").
 -include("address_tools.hrl").
 
--record(middleman_state, {
+-record(st, {
                              id        = undefined            %% This middleman server ID
+                            ,server    = undefined            %% ServerId (server IP) for 'ignore' message purposes
                             ,fsm_cache = undefined            %% Local cache {HW_address, Pid} MAP of know client FSM's
                           }).
 
@@ -35,7 +36,7 @@
 %% ------------------------------------------------------------------
 
 start_link(Opts) ->
-  Id = proplists:get_value(who_you_are,Opts), 
+  Id       = proplists:get_value(who_you_are,Opts),
   gen_server:start_link({local, Id}, ?MODULE, Opts, []).
 
 
@@ -43,9 +44,10 @@ start_link(Opts) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(Args) ->
-  Id = proplists:get_value(who_you_are,Args), 
-  NewState = #middleman_state{ id = Id, fsm_cache = dict:new() },
+init(Opts) ->
+  Id       = proplists:get_value(who_you_are,Opts), 
+  ServerId = proplists:get_value(server_id,Opts), 
+  NewState = #st{ id = Id, server = ServerId, fsm_cache = dict:new() },
 
   io:format("~p: Init..\n", [Id]),
   
@@ -56,7 +58,7 @@ handle_call(_Request, _From, State) ->
 
 
 %% Handle a posible DHCP message from the udp driver
-handle_cast({dhcp, _Scope, Packet}, #middleman_state{ id = Id, fsm_cache = Cache } = State) ->
+handle_cast({dhcp, _Scope, Packet}, #st{ id = Id, fsm_cache = Cache } = State) ->
   io:format("~p: DHCP msg received!!\n",[Id]),
 
   %% Here we go, decode packet
@@ -68,22 +70,22 @@ handle_cast({dhcp, _Scope, Packet}, #middleman_state{ id = Id, fsm_cache = Cache
   gen_fsm:send_event(ClientPid,Msg),
 
       
-  {noreply, State#middleman_state{ fsm_cache = NewCache }};
+  {noreply, State#st{ fsm_cache = NewCache }};
 
 %% Handle a binary coded erlang term
-handle_cast({udp, Scope, Packet}, #middleman_state{id = Id} = State) ->
+handle_cast({udp, Scope, Packet}, #st{id = Id} = State) ->
       io:format("~p: msg received!! ~p\n",[Id, binary_to_term(Packet)]),
     {noreply, State};
 
 %% Handle any unknow message
-handle_cast(Msg, #middleman_state{id = Id} = State) ->
+handle_cast(Msg, #st{id = Id} = State) ->
       io:format("~p: msg received!! ~p\n I must die!!\n",[Id, Msg]),
     {stop, i_dont_like_these_msgs, State}.
 
 %% Handle a DOWN message from a diying fsm and remove it from the cache.
-handle_info({'DOWN', _, process, Pid, Reason}, #middleman_state{ fsm_cache = Cache} = State) ->
+handle_info({'DOWN', _, process, Pid, Reason}, #st{ fsm_cache = Cache} = State) ->
     io:format("~p: Hey! client FSM ~p terminated with reason: ~p..\n", [?MODULE,Pid,Reason]),
-    NewState = State#middleman_state{ fsm_cache = cache_remove_pid(Cache, Pid) },
+    NewState = State#st{ fsm_cache = cache_remove_pid(Cache, Pid) },
 
     {noreply,  NewState };
 
@@ -128,8 +130,9 @@ record_to_msg(#dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xi
 
     %% DHCPREQUEST. Issued from the client to a server in response to a DHCPOFFER to accept or reject the offered 
     %% IP address, along with desired or additional parameter settings. The DHCPREQUEST is also used by clients 
-    %% desiring to extend or renew their existing IP address lease.
-    request -> {request, MyPid, Packet}; %% {ignore, MyPid, Packet} if client accepted other server offer
+    %% desiring to extend or renew their existing IP address lease. We calculate the client state and inform the DORA
+    %% machine about client state.
+    request -> {request, client_is(Packet), MyPid, Packet}; %% {ignore, MyPid, Packet} if client accepted other server offer
 
     %% DHCPDECLINE. Issued from the client to the server, to indicate that the IP address offered by the server is 
     %% already in use by another client. The DHCP server will then typically mark the IP address as unavailable.
@@ -177,6 +180,17 @@ record_to_msg(#dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xi
 %% get client id from DHCP record, use hwaddr as a default
 get_client_id(#dhcp_packet{ chaddr = Id }) -> Id. 
 
+client_is(#dhcp_packet{ options = Options, flags = Flags }) ->
+    case dhcp_options:option_search(server_id, Options) of
+    not_found             -> case dhcp_options:option_search(requested_address, Options) of
+                             not_found              -> case (Flags bsr 15) == 1 of
+                                                       false -> renewing;
+                                                       _     -> rebinding
+                                                       end;
+                             {requested_address, _} -> init_reboot
+                              end;
+    {server_id, _}        -> selecting
+    end.
 
 %% map a DHCP binary packet into a record for easy processing.
 packet_to_record(?DHCP_PACKET) ->
@@ -227,5 +241,7 @@ record_to_packet(#dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops,
 
 record_to_packet(_) ->
   {error, unknown_record}.
+
+
 
 
