@@ -14,7 +14,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, option_specs/0, check_valid_port/1]).
+-export([start_link/1, option_specs/0, check_iface/1, check_valid_port/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -32,16 +32,28 @@ start_link(Args) ->
 
 option_specs() ->
     {    
-        [{udp_port,$U,"udp",{integer,67},"UDP listening port."}]          %% options spec to request a udp port on the cmd-line
-        ,[fun check_valid_port/1]                                         %% fun to check udp_port supplied by users.
+        [
+           {udp_iface, $I, "iface", string, "Listen on iface."}
+          ,{udp_port,$U,"udp",{integer,67},"UDP listening port."}]          %% options spec to request a udp port on the cmd-line
+        ,[
+           fun check_iface/1
+          ,fun check_valid_port/1]                                         %% fun to check udp_port supplied by users.
     }.
 
 -spec check_valid_port([any()]) -> [any()].
 check_valid_port(Opts) ->
     Port = proplists:get_value(udp_port,Opts,67),                          %% Get the UDP port requested. (67 is the default). 
     case (Port > 0) and (Port < 65535) of                                  %% Is requested port between bounds?
-        true ->  Opts;                                                     %% Yes , do no touch anything
-		    false -> {error, {invalid_port, Port}}                                 %% No, signal the user 
+        true  ->  Opts;                                                    %% Yes , do no touch anything
+		    false -> {error, {invalid_port, Port}}                             %% No, signal the user 
+    end.
+
+-spec check_iface([any()]) -> [any()].
+check_iface(Opts) ->
+  Iface = proplists:get_value(udp_iface,Opts,undefined),                %% Get the server id requested. 
+  case Iface of
+    undefined -> Opts;
+    _ -> {error, {invalid_udp_iface, Iface}}                                
     end.
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
