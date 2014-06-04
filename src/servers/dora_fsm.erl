@@ -6,6 +6,7 @@
 -behaviour(gen_fsm).
 -define(SERVER, ?MODULE).
 
+
 %% ------------------------------------------------------------------
 %% API Function Exports
 %% ------------------------------------------------------------------
@@ -22,8 +23,13 @@
 
 -export([idle/2, offer/2, bound/2]).
 
--record(fsm_state, { id = undefined }).
+
 -define(STATE_TRACE(Id, EV, CUR, NEXT), io:format("Id: Received EV while in CUR state, going to NEXT\n", [])).
+
+
+-record(st, { id = undefined }).
+
+
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
@@ -38,18 +44,18 @@ start_link(Opts) when is_list(Opts) ->
 init(Opts) when is_list(Opts) ->
     Id = proplists:get_value(who_you_are,Opts), 
     io:format("~p: Init with Args: ~w\n", [Id,Opts]),
-    {ok, idle, #fsm_state{ id = Id} }.
+    {ok, idle, #st{ id = Id} }.
 
 
-idle({discover, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
+idle({discover, MyPid, Packet}, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, discover, idle, offer),
     {next_state, offer, State, 30000};
 
-idle({inform, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
+idle({inform, MyPid, Packet}, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, inform, idle, idle),
     {next_state, idle, State};
 
-idle({request, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
+idle({request, MyPid, Packet}, #st{ id = Id } = State) ->
     case true of
         true ->
             ?STATE_TRACE(Id, request, idle, bound),
@@ -59,11 +65,11 @@ idle({request, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
             {next_state, idle, State}
     end.
 
-offer(timeout, #fsm_state{ id = Id } = State) ->
+offer(timeout, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, timeout, offer, idle),
     {next_state, idle, State};
 
-offer({request, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
+offer({request, MyPid, Packet}, #st{ id = Id } = State) ->
     case true of
         true -> 
             ?STATE_TRACE(Id, request, offer, bound),
@@ -73,11 +79,11 @@ offer({request, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
             {next_state, idle, State}
     end;
 
-offer({ignore, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
+offer({ignore, MyPid, Packet}, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, ignore, offer, stop),
     {stop, ignored, State}.
 
-bound({request, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
+bound({request, MyPid, Packet}, #st{ id = Id } = State) ->
     case true of
         true ->
             ?STATE_TRACE(Id, request, bound, bound),
@@ -87,11 +93,11 @@ bound({request, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
             {next_state, idle, State}
     end;
 
-bound({release, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
+bound({release, MyPid, Packet}, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, release, bound, idle),
     {next_state, idle, State};
 
-bound({decline, MyPid, Packet}, #fsm_state{ id = Id } = State) ->
+bound({decline, MyPid, Packet}, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, decline, bound, idle),
     io:format("~p: Received DECLINE while in BOUND state, going to IDLE\n", [Id]),
     {next_state, idle, State}.
