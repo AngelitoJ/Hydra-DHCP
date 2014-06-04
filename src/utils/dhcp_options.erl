@@ -31,12 +31,12 @@ encode_options([]) -> <<255:8>>.                                               %
 option_search(requested_ip_address,Opts) -> 
   case lists:keysearch(requested_ip_address, 1, Opts) of
     {value, Value} -> Value;
-        _              -> {requested_ip_address, {0, 0, 0, 0}}
+    _              -> {requested_ip_address, {0, 0, 0, 0}}
     end;
 option_search(Key,Opts) ->
   case lists:keysearch(Key, 1, Opts) of
     {value, Value} -> Value;
-        Other          -> Other
+    _              -> not_found
     end.
 
 
