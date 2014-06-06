@@ -13,7 +13,7 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(CHILD(I, Type, Args), {I, {I, start_link, [Args]}, permanent, 5000, Type, [I]}).
+-define(CHILDWRK(I, Args), {I, {I, start_link, [Args]}, temporary, 5000, worker, [I]}).
 
 %% ===================================================================
 %% API functions
@@ -27,7 +27,7 @@ start_link(Opts) ->  %% Opts is a property list
 %% ===================================================================
 
 init(Opts) ->
-    io:format("~p: Init..\n", [?MODULE]),
+    io:format("[~p]: Init..\n", [?MODULE]),
 
-    {ok, { {one_for_one, 5, 10}, []} }.
+    {ok, { {simple_one_for_one, 5, 10}, [?CHILDWRK(dora_fsm, Opts)]} }.
 
