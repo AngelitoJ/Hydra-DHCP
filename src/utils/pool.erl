@@ -1,3 +1,6 @@
+%% Hydra DHCP Server project
+%% (C) 2014 Angel J. Alvarez Miguel
+
 -module(pool).
 
 -export([new/0, new/1, get_next/1, remove_pid/2]).
