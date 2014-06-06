@@ -21,9 +21,9 @@
 -include("address_tools.hrl").
 
 -record(address, {                              %% An address record represents this basic allocation unit
-                     ip                         %% IP address
-                    ,status                     %% Status = AVAILABLE | OFFERED | ALLOCATED | EXPIRED..
-                    ,clientid                   %% ID of client holding the address if any.
+                     ip           = undefined   %% IP address
+                    ,status       = undefined   %% Status = AVAILABLE | OFFERED | ALLOCATED | EXPIRED..
+                    ,lease        = undefined   %% lease info if this IP is allocated
                     ,options      = undefined   %% Options to this allocation
                 }).
 
@@ -67,7 +67,7 @@ init(Opts) ->
 %% Look for a suitable free address for the client (client can request one) and mark it as offered.
 handle_call({reserve, ClientId, RequestedIP}, _From, State) ->
     Result = case select_address(State, ClientId, RequestedIP) of
-        {ok, Address}   -> reserve_address(State, Address, ClientId);
+        {ok, Address}   -> reserve_address(State, Address, ClientId);  
         {error, Reason} -> {error, Reason}
     end,
     {reply, Result, State};
@@ -173,7 +173,7 @@ state_init({range, Start, End}, #st{ id = Id, pool = Tid } = State) ->
     pool_populate(
                      Tid
                     ,fun(IP) -> %%io:format("[~p]: Population pool with address ~p\n",[Id, IP]),
-                                #address{ ip = IP, status = free , clientid = undefined} end
+                                #address{ ip = IP, status = free } end
                     ,Start
                     ,End
                     ),
@@ -191,8 +191,15 @@ state_init(Tuple,#st{ id = Id } = State) ->
     io:format("[~p]: Unknow Pool setting ~p:\n", [Id,Tuple]),
     State.
 
+%% Lookup pattern matching againt some specified address template
+pool_lookup(#st{ pool = Tid }, Pattern) ->
+    case ets:match(Tid, Pattern, 1) of
+        [Address] -> {ok, Address};
+        []     -> not_found
+    end.
+
 %% Lookup a IP address and tag it accordingly free | offered | not_found
-pool_lookup(State, Ip) ->
+pool_lookup_ip(State, Ip) ->
     case ets:lookup(State#st.pool, Ip) of
         [Address] when Address#address.status == free    -> {free, Address};
         [Address] when Address#address.status == offered -> {offered, Address};
@@ -227,20 +234,21 @@ leases_insert(State, Lease) when is_record(Lease, lease) ->
 leases_remove(State, Id) -> 
     ok = dets:delete(State#st.leases, Id).
 
-%% Transfer active leases to pool folding over the dets table to avoid collecting large results
+%% Transfer leases to pool folding over the dets table to avoid collecting large results
 leases_to_pool(#st{ id = Id, options = Options, leases = Tidleases } = State) ->
+    io:format("[~p]: Transferring client leases to ETS pool.\n",[Id]),
     Now = calendar:datetime_to_gregorian_seconds({date(), time()}),
     dets:foldl(
                 fun(Lease, Acc) -> case Lease#lease.expires > Now of
-                                   %% Populate the pool with the address extraacted from the list
-                                   true  -> io:format("[~p]: Transferring client ~p lease to pool.\n",[Id,Lease#lease.clientid]),
+                                   %% Populate the pool with the address extracted from the list
+                                   true  -> 
                                             pool_insert(State, #address{ 
                                                              ip       = Lease#lease.ip
                                                             ,options  = Options
-                                                            ,clientid = Lease#lease.clientid 
+                                                            ,lease    = Lease
                                                             }),
                                     Acc;
-                                    false -> Acc
+                                    false -> leases_remove(State, Lease#lease.clientid)
                                     end
                 end
                 ,[]
@@ -248,10 +256,11 @@ leases_to_pool(#st{ id = Id, options = Options, leases = Tidleases } = State) ->
 
 
 %% Try to select the first free IP address available
-select_address(#st{ pool = Tid , options = Options }, _ClientId, {0, 0, 0, 0}) ->
-    case ets:match(Tid, #address{ ip = '$1', status = free }, 1) of
-        [Addr] -> {ok, #address{ ip = Addr, status = free, options = Options}};
-        []     -> {error, "No address is available for this request"}
+select_address(State, _ClientId, {0, 0, 0, 0}) ->
+%%    case ets:match(Tid, #address{ ip = '$1', status = free }, 1) of
+    case pool_lookup(State, #address{ ip = '$1', status = free }) of
+        [Addr]        -> {ok, #address{ ip = Addr, status = free, options = State#st.options}};
+        not_found     -> {error, "No address is available for this request"}
     end;
 
 %% Try to select the client requested IP if posible.
@@ -263,7 +272,7 @@ select_address(#st{ options = Options } = State, ClientId, RequestedIP) ->
         {ok, Lease}      -> {ok, #address{ip = Lease#lease.ip, options = Options}};
 
         %% There is a expired lease, we have to check the pool                                                                
-        {expired, Lease} -> case pool_lookup(State, Lease#lease.ip) of
+        {expired, Lease} -> case pool_lookup_ip(State, Lease#lease.ip) of
                             %% The address is free we can reuse it anyway
                             {free, Address}    -> {ok, Address#address{options = Options}};
                             %% The address is not free , we remove the lease and try again
@@ -271,7 +280,7 @@ select_address(#st{ options = Options } = State, ClientId, RequestedIP) ->
                                                   select_address(State, ClientId, RequestedIP)
                             end;
         %% There is no lease we try to get a new address from the pool                
-        not_found        -> case pool_lookup(State, RequestedIP) of
+        not_found        -> case pool_lookup_ip(State, RequestedIP) of
                             %% the address is free we use it
                             {free, Address}    -> {ok, Address#address{ options = Options}};
                             %% the address is offered 
