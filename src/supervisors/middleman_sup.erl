@@ -44,8 +44,6 @@ check_middleman_pool(Opts) ->
 %% ===================================================================
 
 init(Opts) ->
-%%    PoolSize     = proplists:get_value(middleman_pool,Opts),
-%%    ChildrenSpec = [ ?CHILD(X, worker, middleman_srv, [{who_you_are,srv_id(X)}|Opts]) || X <- lists:seq(1,PoolSize) ],
 
     %% Build a list of children upon user request
     NumChildren  = proplists:get_value(middleman_pool,Opts),
@@ -64,11 +62,6 @@ init(Opts) ->
     io:format("~p: Init.. I got ~p children to spawn\n", [?MODULE,length(ChildrenSpec)]),
 
     {ok, { {one_for_one, 5, 10}, ChildrenSpec } }.
-
-%% Make a new atom to name a middlemen server
-%% srv_id(Id) ->
-%%	Server_name = "middleman_srv_" ++ integer_to_list(Id),
-%%	list_to_atom(Server_name).
 
 
 
