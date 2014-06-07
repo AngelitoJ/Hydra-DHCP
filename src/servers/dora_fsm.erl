@@ -27,7 +27,10 @@
 -define(STATE_TRACE(Id, EV, CUR, NEXT), io:format("Id: Received EV while in CUR state, going to NEXT\n", [])).
 
 
--record(st, { id = undefined }).
+-record(st, { 
+                 id    = undefined  %% Client id this FSM is managing
+                ,pools = []         %% a list of funs used to select the right pool
+                }).
 
 
 %% ------------------------------------------------------------------
@@ -35,19 +38,25 @@
 %% ------------------------------------------------------------------
 
 start_link(Opts) when is_list(Opts) ->
-    gen_fsm:start_link({local, ?SERVER}, ?MODULE, [{who_you_are,test_fsm}|Opts], []).
+    gen_fsm:start_link({local, ?SERVER}, ?MODULE, Opts, []).
 
 %% ------------------------------------------------------------------
 %% gen_fsm Function Definitions
 %% ------------------------------------------------------------------
 
 init(Opts) when is_list(Opts) ->
-    Id = proplists:get_value(who_you_are,Opts), 
-    io:format("~p: Init with Args: ~w\n", [Id,Opts]),
-    {ok, idle, #st{ id = Id} }.
-
+    case proplists:is_defined(client_id,Opts) of
+        true  ->
+                Id = proplists:get_value(client_id,Opts), 
+                io:format("[~p]: Init with Args: ~w\n", [Id,Opts]),
+                {ok, idle, #st{ id = Id} };
+        false ->
+                {stop, no_client_id}
+    end.
 
 idle({discover, MyPid, Packet}, #st{ id = Id } = State) ->
+%%    case select_pool(Id) of
+%%        {ok, PoolPid} -> 
     ?STATE_TRACE(Id, discover, idle, offer),
     {next_state, offer, State, 30000};
 
@@ -64,7 +73,7 @@ idle({request, MyPid, Packet}, #st{ id = Id } = State) ->
             ?STATE_TRACE(Id, request, idle, idle),
             {next_state, idle, State}
     end.
-
+%% Timeout in offer state , the client has never responded we free the offered IP
 offer(timeout, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, timeout, offer, idle),
     {next_state, idle, State};
@@ -126,4 +135,39 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+chain({ok, State}, Fun) -> Fun(State);
+chain(Other, _) -> Other.
+
+discover_and_setup_pool(#st{ id = Id} = State) ->
+    case supervisor:which_children(addr_pool_sup) of
+        [Head |Tail] ->
+                        PoolInfo = lists:map(
+                                        fun({_, Pid, _, _}) ->  setup_pool_server(Pid) end
+                                        ,[Head|Tail]
+                                        ),
+                        io:format("[~p]: I got ~p address pool server funs..\n", [Id, length(PoolInfo)]),
+                        {ok, State#st{ pools = PoolInfo }};
+        _             ->
+                        {stop, no_pool_servers }
+    end.
+
+%% get a fun from an addres_pool_server and store with its Pid
+setup_pool_server(Pid) when is_pid(Pid) ->
+    erlang:monitor(process, Pid),
+    case gen_server:call(Pid, selection_fun) of
+        Fun when is_function(Fun) -> {Pid, Fun};
+        _                         -> error("not selection fun received.")
+    end.
+
+
+
+
+
+
+
+
+
+
+
 
