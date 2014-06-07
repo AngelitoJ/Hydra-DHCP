@@ -1,6 +1,9 @@
 %% Hydra DHCP Server project
 %% (C) 2014 Angel J. Alvarez Miguel
 
+
+
+
 -module(dora_cache_srv).
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
@@ -38,7 +41,7 @@ init(Opts) ->
 	State = #st{ children = cache:new() },
     {ok, State}.
 
-
+%% Lookup a FSM pid by its Client ID (and spawn a new child if not found)
 handle_call({get_pid, Clientid}, _From, #st{ children = Children } = State) ->
     case cache:look_by_id(Children, Clientid) of
         %% Found, just reply with the requested value
