@@ -85,9 +85,10 @@ Basic application architecture
 	1. UDP_DRV_SRV
 		- One per UDP port served (currently on UDP port), dispatch UDP messages between network hosts and erlang processes.
 	2. MIDDLEMAN_SRV
-		- At least one per core, transform UDP message to erlang terms and viceversa, and talks to DORA finite state machines.  
+		- At least one per core, transform UDP message to erlang terms and viceversa, and talks (async) to DORA finite state machines.
 	3. DORA_FSM
-		- One per active client, manage the entire DHCP exchange state machine (a.k.a DORA) and talks to pool servers to get leases.
+		- One per active client, manage the entire DHCP exchange state machine (a.k.a DORA) and talks (sync) to pool servers
+		 to get leases.
 	4. ADDR_POOL_SRV
 		- One per addr pool configured, manages client leases and pool policies.
 
