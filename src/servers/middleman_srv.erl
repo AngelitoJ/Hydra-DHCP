@@ -191,8 +191,15 @@ record_to_msg(#dhcp_packet{ msg_type = MessageType } = Packet) ->
 %   end.
 
 %% get client id from DHCP record, use hwaddr as a default
-get_client_id(#dhcp_packet{ chaddr = Id }) -> Id. 
+get_client_id(#dhcp_packet{ chaddr = HWid, options = Opts }) -> 
+    case dhcp_options:search(client_id,Opts) of
+        {client_id, Clientid} ->
+                                Clientid
+        not_found             ->
+                                HWid
+    end. 
 
+%% figure client state 'init_reboot | selecting | renewing | rebinding ' from various fields 
 client_is(#dhcp_packet{ options = Options, flags = Flags }) ->
     case dhcp_options:option_search(server_id, Options) of
     not_found             -> case dhcp_options:option_search(requested_address, Options) of
