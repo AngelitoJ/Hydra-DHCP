@@ -59,7 +59,7 @@ init(Opts) ->
                                 } end
                                 ,lists:seq(1,NumChildren)),
 
-    io:format("~p: Init.. I got ~p children to spawn\n", [?MODULE,length(ChildrenSpec)]),
+    io:format("[~p]: Init.. I got ~p children to spawn\n", [?MODULE,length(ChildrenSpec)]),
 
     {ok, { {one_for_one, 5, 10}, ChildrenSpec } }.
 
