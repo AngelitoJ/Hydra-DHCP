@@ -28,8 +28,12 @@
 
 
 -record(st, { 
-                 id    = undefined  %% Client id this FSM is managing
-                ,pools = []         %% a list of funs used to select the right pool
+                 id          = undefined  %% Client id this FSM is managing
+                ,ip          = undefined
+                ,options     = undefined
+                ,addr_server = undefined
+                ,server_id   = undefined
+                ,pools       = []         %% a list of funs used to select the right pool
                 }).
 
 
@@ -54,22 +58,36 @@ init(Opts) when is_list(Opts) ->
                             ]
                         ),
     case Result of
-        {ok, State, _} -> {ok, idle, State};
+        {ok, State, _} -> {ok, idle, State, 30000 };
         {error, Reason} -> {stop, Reason}
     end.
 
+%% Timeout while in idle state, we stop and finish
+idle(timeout, State) ->
+    ?STATE_TRACE(Id, timeout, idle, stop),
+    {stop, normal}.
 
-idle({discover, MyPid, Packet}, #st{ id = Id } = State) ->
-%%    case select_pool(Id) of
-%%        {ok, PoolPid} -> 
-    ?STATE_TRACE(Id, discover, idle, offer),
-    {next_state, offer, State, 30000};
+
+%% Receive discover while in idle state, process request and change state accordingly.
+idle({discover, MyPid, Packet}, #st{ id = Id, pools = Pools } = State) ->
+    case select_pool(Pools, Id, Packet) of                                      
+        {ok, AddrPid} ->                                                         %% We got suitable pool for this client
+                        {ok, Addr, Opts} = pool_get_addr(AddrPid),               %% get an addres and a list of options
+                        ok               = pool_mark(AddrPid, Addrs, offered),   %% mark as offered the address
+                        ok               = send_offer(Mypid, Packet, Addr, Opts),%% reply to the caller with a offer message
+                        ?STATE_TRACE(Id, discover, idle, offer),                 %% transition to offer state
+                        {next_state, offer, State#st{ ip = Addr, options = Opts, addr_server = PoolPid }, 30000};     %% Timeout if client does not reply in 30 sec 
+        {no_pool}     ->                                                         %% No pool for this client
+                        ?STATE_TRACE(Id, discover, idle, stop),                  %% finish here
+                        {stop, normal, State}
+    end.
+
 
 idle({inform, MyPid, Packet}, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, inform, idle, idle),
     {next_state, idle, State};
 
-idle({request, MyPid, Packet}, #st{ id = Id } = State) ->
+idle({request, init_reboot, MyPid, Packet}, #st{ id = Id } = State) ->
     case true of
         true ->
             ?STATE_TRACE(Id, request, idle, bound),
@@ -77,27 +95,52 @@ idle({request, MyPid, Packet}, #st{ id = Id } = State) ->
         false ->
             ?STATE_TRACE(Id, request, idle, idle),
             {next_state, idle, State}
-    end.
-%% Timeout in offer state , the client has never responded we free the offered IP
-offer(timeout, #st{ id = Id } = State) ->
-    ?STATE_TRACE(Id, timeout, offer, idle),
-    {next_state, idle, State};
+    end;
 
-offer({request, MyPid, Packet}, #st{ id = Id } = State) ->
+idle(Any, #st{ id = Id } = State) ->
+    io:format("[~p]: Received this: ~p while in idle state, doing nothing",[Id,Any]),
+    {next_state, idle, State}.
+
+%% Timeout in offer state , the client has never responded we free the offered IP and go back to idle
+offer(timeout, #st{ id = Id, ip = Addr, addr_server = AddrPid} = State) ->
+    ok = pool_mark(AddrPid, Addr, free),
+    ?STATE_TRACE(Id, timeout, offer, idle),
+    {next_state, idle, State#st{ ip = undefined, addr_server = undefined , options = undefined } , 30000 };
+
+offer({request, selecting, MyPid, Packet}, #st{ id = Id, ip = Addr, server_id = Serverid , addr_server = PoolPid } = State) ->
+    case get_serverid(Packet) == Serverid of
+        true ->                                            %% Client have choosen our offer
+                {ok, Addr, Options} = pool_mark(PoolPid, Addr, allocated),
+                ok                  = send_ack(MyPid, Packet, Addr, Options),
+                ?STATE_TRACE(Id, request, offer, bound),
+                {next_state, bound, State};
+        false ->                                           %% Client ignored our offer
+                ok = pool_mark(PoolPid, Addr, free),
+                ?STATE_TRACE(Id, request, offer, stop),
+                {stop, normal, State}
+    end;
+
+%%offer({ignore, MyPid, Packet}, #st{ id = Id } = State) ->
+%%    ?STATE_TRACE(Id, ignore, offer, stop),
+%%    {stop, ignored, State};
+
+offer(Any, #st{ id = Id } = State) ->
+    io:format("[~p]: Received this: ~p while in offer state, doing nothing",[Id,Any]),
+    {next_state, idle, State}.
+
+
+
+bound({request, renewing, MyPid, Packet}, #st{ id = Id } = State) ->
     case true of
-        true -> 
-            ?STATE_TRACE(Id, request, offer, bound),
+        true ->
+            ?STATE_TRACE(Id, request, bound, bound),
             {next_state, bound, State};
         false ->
-            ?STATE_TRACE(Id, request, offer, idle),
+            ?STATE_TRACE(Id, request, bound, idle),
             {next_state, idle, State}
     end;
 
-offer({ignore, MyPid, Packet}, #st{ id = Id } = State) ->
-    ?STATE_TRACE(Id, ignore, offer, stop),
-    {stop, ignored, State}.
-
-bound({request, MyPid, Packet}, #st{ id = Id } = State) ->
+bound({request, rebinding, MyPid, Packet}, #st{ id = Id } = State) ->
     case true of
         true ->
             ?STATE_TRACE(Id, request, bound, bound),
@@ -114,7 +157,12 @@ bound({release, MyPid, Packet}, #st{ id = Id } = State) ->
 bound({decline, MyPid, Packet}, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, decline, bound, idle),
     io:format("~p: Received DECLINE while in BOUND state, going to IDLE\n", [Id]),
+    {next_state, idle, State};
+
+bound(Any, #st{ id = Id } = State) ->
+    io:format("[~p]: Received this: ~p while in bound state, doing nothing",[Id,Any]),
     {next_state, idle, State}.
+
 
 state_name(_Event, State) ->
     {next_state, state_name, State}.
@@ -131,7 +179,8 @@ handle_sync_event(_Event, _From, StateName, State) ->
 handle_info(_Info, StateName, State) ->
     {next_state, StateName, State}.
 
-terminate(_Reason, _StateName, _State) ->
+terminate(_Reason, _StateName, #st{id = Id} = State) ->
+    io:format("[~p]: DORA for client ~w terminated\n", [Id,Id]),
     ok.
 
 code_change(_OldVsn, StateName, State, _Extra) ->
@@ -177,7 +226,27 @@ init_pool(#st{ id = Id} = State, Opts) ->
     end.
 
 
+%% Get suitable pool server for this request.
+pool_select(Pools, Id, Packet) ->
+    Pids = lists:fold(
+                    fun({Pid, Fun}, Acc) ->
+                                    case Fun(Id, Packet) of
+                                        true  ->
+                                                Pid|Acc];
+                                        false ->
+                                                Acc
+                                    end, end 
+                    ,[]
+                    ,Pools),
+    case Pids of 
+        []    ->
+                no_pool;          %% give no_pool to the caller
+        [H|T] ->
+                H                 %% Select the first Pid available 
+    end.
 
+
+pool_get_addr()
 
 
 
