@@ -45,14 +45,19 @@ start_link(Opts) when is_list(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Opts) when is_list(Opts) ->
-    case proplists:is_defined(client_id,Opts) of
-        true  ->
-                Id = proplists:get_value(client_id,Opts), 
-                io:format("[~p]: Init with Args: ~w\n", [Id,Opts]),
-                {ok, idle, #st{ id = Id} };
-        false ->
-                {stop, no_client_id}
+   Result = lists:foldl(
+                             fun bind/2              %% chain computations folding funs over the inital state
+                            ,{ok, #st{}, Opts}       %% initial state
+                            ,[                       %% init funs
+                                 fun init_id/2
+                                ,fun init_pool/2
+                            ]
+                        ),
+    case Result of
+        {ok, State, _} -> {ok, idle, State};
+        {error, Reason} -> {stop, Reason}
     end.
+
 
 idle({discover, MyPid, Packet}, #st{ id = Id } = State) ->
 %%    case select_pool(Id) of
@@ -136,33 +141,40 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-chain({ok, State}, Fun) -> Fun(State);
-chain(Other, _) -> Other.
+%% An 'Either State a' monadic binding in Erlang..
+bind(Fun, {ok, State, Opts}) when is_function(Fun) -> Fun(State, Opts);
+bind(_, {error, _} = Other) -> Other.  
 
-discover_and_setup_pool(#st{ id = Id} = State) ->
+
+init_id(State, Opts) ->
+    case proplists:is_defined(client_id,Opts) of
+        true  ->
+                Id = proplists:get_value(client_id,Opts), 
+                io:format("[~p]: DORA Init for client ~w\n", [Id,Id]),
+                {ok, #st{ id = Id}, Opts};
+        false ->
+                {error, no_client_id}
+    end.
+
+%% Gather pools server pids and selection funs
+init_pool(#st{ id = Id} = State, Opts) ->
     case supervisor:which_children(addr_pool_sup) of
         [Head |Tail] ->
-                        PoolInfo = lists:map(
-                                        fun({_, Pid, _, _}) ->  setup_pool_server(Pid) end
-                                        ,[Head|Tail]
-                                        ),
+                        PoolInfo = lists:foldl(
+                                        fun({_, Pid, _, _}, Acc) -> 
+                                                            erlang:monitor(process, Pid),
+                                                            case gen_server:call(Pid, selection_fun) of
+                                                                Fun when is_function(Fun) -> 
+                                                                                        [{Pid, Fun}| Acc];
+                                                                _                         -> Acc
+                                                            end end
+                                        ,[]
+                                        ,[Head|Tail] ),
                         io:format("[~p]: I got ~p address pool server funs..\n", [Id, length(PoolInfo)]),
-                        {ok, State#st{ pools = PoolInfo }};
+                        {ok, State#st{ pools = PoolInfo }, Opts};
         _             ->
-                        {stop, no_pool_servers }
+                        {error, no_pool_servers }
     end.
-
-%% get a fun from an addres_pool_server and store with its Pid
-setup_pool_server(Pid) when is_pid(Pid) ->
-    erlang:monitor(process, Pid),
-    case gen_server:call(Pid, selection_fun) of
-        Fun when is_function(Fun) -> {Pid, Fun};
-        _                         -> error("not selection fun received.")
-    end.
-
-
-
-
 
 
 
