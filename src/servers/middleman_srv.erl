@@ -30,7 +30,6 @@
                             ,fsm_cache = undefined            %% Local cache {HW_address, Pid} MAP of know client FSM's
                           }).
 
-
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
@@ -64,13 +63,40 @@ handle_cast({dhcp, _Scope, Packet}, #st{ id = Id, fsm_cache = Cache } = State) -
   %% Here we go, decode packet
   {ok, Record}          = packet_to_record(Packet),          %% Decode Packet into a record
   ClientId              = get_client_id(Packet),             %% get the client id from the record contents
-  {ClientPid, NewCache} = cache_get_pid(Cache,ClientId),     %% Lookup for the client FSM (and spawn a new one if needed) 
   Msg                   = record_to_msg(Record),             %% make up a suitable message to the FSM
+  
+  case cache:lookup_by_id(Cache, ClientId) ->
+    {ok, Pid} ->                                             %% We know the client fsm pid, proceed
+                gen_fsm:send_event(Pid,Msg);
+    error     ->                                             %% We dont know the pid yet 
+                case gen_server:call(dora_cache_srv, {get_pid, Id}) of
+                  {ok, Pid}       ->                         %% Ok monitor the new pid, send the message and remember the pid
+                                    erlang:monitor(process, Pid),
+                                    gen_fsm:send_event(Pid,Msg),
+                                    {noreply, #st{ fsm_cache = cache:insert(Cache,Id,Pid)} };
+                  {error, Reason} ->                         %% Something went wrong, we have no pid, bail out
+                                    {error, Reason}
+                 end
 
-  gen_fsm:send_event(ClientPid,Msg),
+  end.
 
-      
-  {noreply, State#st{ fsm_cache = NewCache }};
+%% Handle a DORA fsm message
+handle_cast({offer, Record}, #st{id = Id} = State) ->
+      io:format("~p: msg received!! ~p\n",[Id, offer]),
+    {noreply, State};
+
+handle_cast({ack, Record}, #st{id = Id} = State) ->
+      io:format("~p: msg received!! ~p\n",[Id, ack]),
+    {noreply, State};
+
+handle_cast({nack, Record}, #st{id = Id} = State) ->
+      io:format("~p: msg received!! ~p\n",[Id, nack]),
+    {noreply, State};
+
+handle_cast({Other, Record}, #st{id = Id} = State) ->
+      io:format("~p: msg received!! ~p\n",[Id, Other]),
+    {noreply, State};
+
 
 %% Handle a binary coded erlang term
 handle_cast({udp, Scope, Packet}, #st{id = Id} = State) ->
@@ -85,13 +111,12 @@ handle_cast(Msg, #st{id = Id} = State) ->
 %% Handle a DOWN message from a diying fsm and remove it from the cache.
 handle_info({'DOWN', _, process, Pid, Reason}, #st{ fsm_cache = Cache} = State) ->
     io:format("~p: Hey! client FSM ~p terminated with reason: ~p..\n", [?MODULE,Pid,Reason]),
-    NewState = State#st{ fsm_cache = cache_remove_pid(Cache, Pid) },
+    NewState = State#st{ fsm_cache = cache:remove_by_pid(Cache, Pid) },
 
     {noreply,  NewState };
 
 handle_info(_Info, State) ->
     {noreply, State}.
-
 
 
 terminate(_Reason, _State) ->
@@ -104,23 +129,10 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-
-%% resolve client id from internel cache or ask fsm_manager to spawn a new client FSM
--spec cache_get_pid(dict(),atom()) -> {pid(),dict()}.
-cache_get_pid(Cache,Id) -> {undefined,dict:new()}.
-
--spec cache_remove_pid(dict(), atom()) -> dict().
-cache_remove_pid(Cache, Pid) -> dict:new().
-
-
 %% make a tagged msg suitable to be sent from/to a DORA gen_fsm. Tags allow easier processing in the fsm, because
 %% most combinations of field in the DHCP packet will map to a diferent message.
 
-record_to_msg(#dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xid = Xid, secs = Secs
-            , flags = Flags, ciaddr = CIAddr, yiaddr = YIAddr, siaddr = SIAddr, giaddr = GIAddr
-            , chaddr = CHAddr, sname = SName, file = File, options = DecodedOptions, msg_type = MessageType
-            , rqaddr = RequestedIp, client_unicast = ClientScope } = Packet) ->
-
+record_to_msg(Packet) ->
   MyPid = self(),             %% Send this process Pid so FSM dont have to deal with Pid resolution
   case MessageType of
 
@@ -160,7 +172,7 @@ record_to_msg(#dhcp_packet{ op = Op, htype = HType, hlen = HLen, hops = Hops, xi
     Other -> {Other, MyPid, Packet}
   end.
 
-%% make a DHCP record in responde to a DORA machine tagged msg, different msgs map to a diferent options into the DHCP message.
+%% make a DHCP record in response to a DORA machine tagged msg, different msgs map to a diferent options into the DHCP message.
 % msg_to_record({Msg,Data}) ->
 %   case Msg of
 
