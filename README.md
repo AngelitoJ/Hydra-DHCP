@@ -20,40 +20,34 @@ The repository is registered on Travis-ci, so a green status means all software 
 
 We will provide a stable release on reaching v 1.0.
 
-Component status legend:
-SETUP: The component basic lyout is done, some bare functionalty but is doesn't work as designed yet.
-WIP  : The component has several aspects implemented, and its receiving new features.
-DONE : The component is finished[1] and seems to perform as designed but can contain obvious bugs.
-QA   : The component is subject to major unit testing
 
-
-- Escript fronted                 : DONE
+- Escript fronted                 : 
 	- Command-line parsing , and complete statup and shutdoen of the bundle OTP application. 
 
-- Cross module get-opt            : DONE
+- Cross module get-opt            : 
 	- Gathering of options specs across all bundled modules.
 
-- Main OTP tree                   : DONE
+- Main OTP tree                   : 
 	- Simple (non distributed) applicaction startup with config data provided from escript frontend.
 
-- Console server                  : SETUP
+- Console server                  : 
 
-- Table master                    : DONE
+- Table master                    : 
 	- Simple inheritance from process deaths, and service of ETS table identifiers to any process.
 
-- UDP Driver                      : SETUP
+- UDP Driver                      : 
 	- UDP port configurable via command-line.
 	- Iface and server ID configuration in progress.
 
-- Middleman DHCP encoder / decoder: SETUP
+- Middleman DHCP encoder / decoder: 
 
-- DORA Cache manager              : SETUP
+- DORA Cache manager              : 
 	- Helps middlemen processes to figure out which FSM is managing client state, and also spawn new FSM on request.
 
-- DORA DHCP State machine         : SETUP
+- DORA DHCP State machine         : 
 	- Manages entire DHCP server state machine for every client. FSM can stop storing data into a suitable pool server (which also presist lease info to a DETS file).
 
-- Address Pool Servers            : WIP  
+- Address Pool Servers            :   
 	- 'Simple pool type' this type manages a simple range of IP's, and a list of options using a ETS table and a DETS table to persist lease information. Simple format suitable for file:consult() usage:
 		- Pool name {name, "Universidad"}
     	- A range of IP's {range, {192,168,1,2}, {192,168,1,253}}
