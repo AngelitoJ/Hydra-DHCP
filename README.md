@@ -8,7 +8,7 @@ This is the source code of an Erlang/OTP application designed to function as a D
 service featuring scalability and resilence thanks to the great OTP framework capabilities.
 
 This is work in progress, yet a rebarized "shell" is provided from day one to manage the entire OTP application as a command-line
-Unix program, so for the most part you only need to follow the install instructions to get a single standalone "hydra-server" executable.
+Unix program, so for the most part you only need to follow the install instructions to get a single standalone "hdcp-server" escript bundle.
 
 
 Project status
