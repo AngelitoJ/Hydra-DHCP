@@ -48,7 +48,7 @@ init(Opts) ->
   ServerId = proplists:get_value(server_id,Opts), 
   NewState = #st{ id = Id, server = ServerId, fsm_cache = dict:new() },
 
-  io:format("~p: Init..\n", [Id]),
+  io:format("[~p]: Init..\n", [Id]),
   
   {ok, NewState}.
 
