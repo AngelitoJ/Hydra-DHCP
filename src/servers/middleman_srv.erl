@@ -65,9 +65,10 @@ handle_cast({dhcp, _Scope, Packet}, #st{ id = Id, fsm_cache = Cache } = State) -
   ClientId              = get_client_id(Packet),             %% get the client id from the record contents
   Msg                   = record_to_msg(Record),             %% make up a suitable message to the FSM
   
-  case cache:lookup_by_id(Cache, ClientId) ->
+  case cache:lookup_by_id(Cache, ClientId) of
     {ok, Pid} ->                                             %% We know the client fsm pid, proceed
-                gen_fsm:send_event(Pid,Msg);
+                gen_fsm:send_event(Pid,Msg),
+                {noreply, State};
     error     ->                                             %% We dont know the pid yet 
                 case gen_server:call(dora_cache_srv, {get_pid, Id}) of
                   {ok, Pid}       ->                         %% Ok monitor the new pid, send the message and remember the pid
@@ -75,10 +76,10 @@ handle_cast({dhcp, _Scope, Packet}, #st{ id = Id, fsm_cache = Cache } = State) -
                                     gen_fsm:send_event(Pid,Msg),
                                     {noreply, #st{ fsm_cache = cache:insert(Cache,Id,Pid)} };
                   {error, Reason} ->                         %% Something went wrong, we have no pid, bail out
-                                    {error, Reason}
+                                    {stop, Reason}
                  end
 
-  end.
+  end;
 
 %% Handle a DORA fsm message
 handle_cast({offer, Record}, #st{id = Id} = State) ->
@@ -132,7 +133,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% make a tagged msg suitable to be sent from/to a DORA gen_fsm. Tags allow easier processing in the fsm, because
 %% most combinations of field in the DHCP packet will map to a diferent message.
 
-record_to_msg(Packet) ->
+record_to_msg(#dhcp_packet{ msg_type = MessageType } = Packet) ->
   MyPid = self(),             %% Send this process Pid so FSM dont have to deal with Pid resolution
   case MessageType of
 
