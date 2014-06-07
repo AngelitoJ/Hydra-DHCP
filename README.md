@@ -44,7 +44,7 @@ QA   : The component is subject to major unit testing
 - DORA DHCP State machine         : SETUP
 - Address Pool Servers             : WIP  
 	- 'Simple pool type' this type manages a simple range of IP's, and a list of options usimg a ETS table and a DETS table to persist lease information. Simple format suitable for file:consult() usage
-	-{ pooldata,{simplepool, [
+	- { pooldata,{simplepool, [
 						 {name, "Universidad"}
         				,{range, {192,168,1,2}, {192,168,1,253}}
 						,{options, [ 
@@ -59,9 +59,6 @@ QA   : The component is subject to major unit testing
           					         ]} ]}
     - Init functions terminated ( file parse, load and state/tables population) 
 
-
-
-
 Brief Project roadmap
 ======================
 
@@ -75,9 +72,6 @@ Brief Project roadmap
 - Distributed DHCP service
 	- Master/Slave HA schemes.
 	- Multimaster HA (Mnesia)
-
-
-
 
 
 Basic application architecture
@@ -193,10 +187,13 @@ INSTALL
 		top_sup: Init, I got 5 children to spawn..
 		misc_sup: Init..
 		[console_srv]: Init... 
-		ets_master_srv: Init..
+		[ets_master_srv]: Init..
 		[addr_pool_sup] Initiating, got 2 address pools to setup
+		[addr_pool_srv_1]: Initiating pool from file ./data/pool2.dat..
 		[addr_pool_srv_1]: Creating ETS pool named 'Universidad2'..
-		[addr_pool_srv_1]: Populating Pool from {10,10,0,2} to {10,10,1,253}..
+		[ets_master_srv]: Pid {<0.38.0>,#Ref<0.0.0.90>} asked for 'Universidad2', we sent not_found..
+		[addr_pool_srv_1]: Creating DETS leases table named 'Universidad2.leases'..
+		[addr_pool_srv_1]: Populating pool from {10,10,0,2} to {10,10,1,253}..
 		[addr_pool_srv_1]: option: {lease_time,3600}
 		[addr_pool_srv_1]: option: {renewal_time,1800}
 		[addr_pool_srv_1]: option: {rebinding_time,3000}
@@ -204,9 +201,12 @@ INSTALL
 		[addr_pool_srv_1]: option: {dns_server,{192,168,1,1}}
 		[addr_pool_srv_1]: option: {domain_name,"uah.es"}
 		[addr_pool_srv_1]: option: {router,{10,10,1,254}}
-		[addr_pool_srv_1]: Initiating pool from file ./data/pool2.dat..
+		[addr_pool_srv_1]: Transferring client leases to ETS pool.
+		[addr_pool_srv_2]: Initiating pool from file ./data/pool1.dat..
 		[addr_pool_srv_2]: Creating ETS pool named 'Universidad'..
-		[addr_pool_srv_2]: Populating Pool from {192,168,1,2} to {192,168,1,253}..
+		[ets_master_srv]: Pid {<0.44.0>,#Ref<0.0.0.129>} asked for 'Universidad', we sent not_found..
+		[addr_pool_srv_2]: Creating DETS leases table named 'Universidad.leases'..
+		[addr_pool_srv_2]: Populating pool from {192,168,1,2} to {192,168,1,253}..
 		[addr_pool_srv_2]: option: {lease_time,3600}
 		[addr_pool_srv_2]: option: {renewal_time,1800}
 		[addr_pool_srv_2]: option: {rebinding_time,3000}
@@ -215,15 +215,15 @@ INSTALL
 		[addr_pool_srv_2]: option: {dns_server,{192,168,1,1}}
 		[addr_pool_srv_2]: option: {domain_name,"uah.es"}
 		[addr_pool_srv_2]: option: {router,{192,168,1,254}}
-		[addr_pool_srv_2]: Initiating pool from file ./data/pool1.dat..
+		[addr_pool_srv_2]: Transferring client leases to ETS pool.
 		dora_cache_sup: Init..
 		dora_cache_srv: Init..
-		dora_dyn_sup: Init..
-		middleman_sup: Init.. I got 4 children to spawn
-		middleman_srv_1: Init..
-		middleman_srv_2: Init..
-		middleman_srv_3: Init..
-		middleman_srv_4: Init..
+		[dora_dyn_sup]: Init..
+		[middleman_sup]: Init.. I got 4 children to spawn
+		[middleman_srv_1]: Init..
+		[middleman_srv_2]: Init..
+		[middleman_srv_3]: Init..
+		[middleman_srv_4]: Init..
 		network_sup: Init..
 		udp_driver_srv: Init..
 		udp_driver_srv: I got 4 middleman pids..
@@ -232,7 +232,6 @@ INSTALL
 
 		[MAIN] Application Timeout
 		Application stopped...
-
 
 
 Authors
