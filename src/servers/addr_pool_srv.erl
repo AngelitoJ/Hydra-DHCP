@@ -15,23 +15,12 @@
 %% gen_server Function Exports
 %% ------------------------------------------------------------------
 
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("address_tools.hrl").
+-include("address_pool.hrl").
 
--record(address, {                              %% An address record represents this basic allocation unit
-                     ip           = undefined   %% IP address
-                    ,status       = undefined   %% Status = AVAILABLE | OFFERED | ALLOCATED | EXPIRED..
-                    ,lease        = undefined   %% lease info if this IP is allocated
-                    ,options      = undefined   %% Options to this allocation
-                }).
 
--record(lease, {                                %% A Lease record describes a DHCP lease
-                     clientid                   %% Client Id holding the lease
-                    ,ip                         %% Address leased
-                    ,expires                    %% Expiration timer
-                }).
 
 -record(st, {                                   %% Address Pool server state record 
                          id        = undefined  %% Id of this pool
@@ -46,8 +35,14 @@
 %% ------------------------------------------------------------------
 
 start_link(Opts) ->
-    Id = proplists:get_value(who_you_are,Opts), 
-    gen_server:start_link({local, Id}, ?MODULE, Opts, []).
+    case proplists:is_defined(who_you_are, Opts) of
+        true -> 
+                Id = proplists:get_value(who_you_are,Opts),
+                gen_server:start_link({local, Id}, ?MODULE, Opts, []);
+        false ->
+                {stop, not_id}
+    end.
+
 
 
 %% ------------------------------------------------------------------
@@ -55,13 +50,27 @@ start_link(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Opts) ->
-    Id                                  = proplists:get_value(who_you_are,Opts),
-    PoolFile                            = proplists:get_value(pool_file,Opts),
+    Result = lists:foldl(
+                             fun bind/2              %% chain computations folding funs over the inital state
+                            ,{ok, #st{}, Opts}       %% initial state
+                            ,[                       %% init funs
+                                 fun init_id/2
+                                ,fun init_filepath/2
+                                ,fun init_simple_pool/2
+                                ,fun init_table_names/2
+                                ,fun init_addrs_table/2
+                                ,fun init_leases_table/2
+                                ,fun init_range/2
+                                ,fun init_options/2
+                                ,fun init_leases/2
+                            ]
+                        ),
+    case Result of
+        {ok, State, _} -> {ok, State};
+        {error, Reason} -> {stop, Reason}
+    end.
 
-    io:format("[~p]: Initiating pool from file ~ts..\n", [Id,PoolFile]),
-    State                               = load_pool(#st{ id = Id, filepath = PoolFile}),
-    
-    {ok, State}.
+
 
 
 %% Look for a suitable free address for the client (client can request one) and mark it as offered.
@@ -113,83 +122,146 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-load_pool(#st{ filepath = File } = State) ->
-    {ok, [{pooldata,PoolData}|_]} = file:consult(File),
-    case PoolData of
-        {simplepool, PoolOpts} -> load_simple_pool(State, PoolOpts);
-        _ -> error("pool type not supported")
+
+%% A n'Either State a' monadic binding in Erlang..
+bind(Fun, {ok, State, Opts}) when is_function(Fun) -> Fun(State, Opts);
+bind(_, {error, _} = Other) -> Other.  
+
+%% Setup process is and pool identity 
+init_id(State, Opts) ->
+    case proplists:is_defined(who_you_are, Opts) of
+        true -> 
+                {ok, State#st{ id = proplists:get_value(who_you_are,Opts)}, Opts};
+        false ->
+                {error, not_id}
     end.
 
-%% Load a simple pool from a property list 
-load_simple_pool(State, Opts) ->
-    {name, Name} = proplists:lookup(name, Opts),     
-    PoolName     = list_to_atom(Name),                     %% Atom for the ETS table name
-    LeasesFile   = Name ++ ".leases",                      %% String for the DETS table file
-    LeasesName   = list_to_atom(LeasesFile),               %% Atom for the DETS table name
-    PoolOpts     = [
-                     {poolname, PoolName}                   %% Name of the ETS pool
-                    ,{leasesname, LeasesName, LeasesFile}   %% declare a leases file attached tp this pool
-                    ] ++ proplists:delete(name, Opts),      %% delete old name property
+%% Setup path to pool file
+init_filepath(State, Opts) ->
+    case proplists:is_defined(pool_file, Opts) of
+        true -> 
+                {ok, State#st{ filepath = proplists:get_value(pool_file,Opts)}, Opts};
+        false ->
+                {error, not_pool_file}
+    end.
 
-    %% Fold over the property list setting up state for every known option
-    NewState = lists:foldl(fun state_init/2, State ,PoolOpts),
+%% Load pool contest from file 
+init_simple_pool(#st{ id = Id } = State, Opts) ->
+    case file:consult(State#st.filepath) of
+        {ok, [{pooldata,{simplepool, PoolOpts}}|_]} -> 
+            io:format("[~p]: Initiating pool from file ~ts..\n", [Id,State#st.filepath]),
+            {ok, State, PoolOpts};
+        _ -> 
+            {error, unknow_pool_format}
+    end.
 
-    %% Now we have to transfer active leases from the leases table to the pool table
-    leases_to_pool(NewState),
-    NewState.
+%% Setup pool and table names
+init_table_names(State,Opts) ->
+    case proplists:is_defined(name, Opts) of
+        true ->
+            {name, Name} = proplists:lookup(name, Opts),
+            PoolName     = list_to_atom(Name),                     %% Atom for the ETS table name
+            LeasesFile   = Name ++ ".leases",                      %% String for the DETS table file
+            LeasesName   = list_to_atom(LeasesFile),               %% Atom for the DETS table name
+            NewOpts      = [
+                             {poolname, PoolName}                   %% Name of the ETS pool
+                            ,{leasesname, LeasesName, LeasesFile}   %% declare a leases file attached tp this pool
+                            ] ++ proplists:delete(name, Opts),      %% delete old name property
+            {ok, State, NewOpts};
+        false ->
+                {error, no_pool_name}
+    end.
 
 
 %% Create a new ETS table for the address pool (or recover it from the table heir) 
-state_init({poolname, Name}, #st{ id = Id } = State) ->
-
-    io:format("[~p]: Creating ETS pool named ~p..\n", [Id,Name]),
-    %% Ask Table heir if table already exists, create a new one if needed and set the heir
-    Tidpool = case gen_server:call(ets_master_srv, {get, Name}) of     
-        {ok, Value}       -> Value;
-        {not_found, Pid}  -> ets:new(Name, [                            
-                                                 public
-                                                ,{keypos, #address.ip}
-                                                ,{heir, Pid, {name, Name}}
-                                            ])
-        end,
-    State#st{ pool = Tidpool };
+init_addrs_table(#st{ id = Id } = State, Opts) ->
+    case proplists:is_defined(poolname,Opts) of
+        true ->
+                Name = proplists:get_value(poolname, Opts),
+                io:format("[~p]: Creating ETS pool named ~p..\n", [Id,Name]),
+                %% Ask Table heir if table already exists, create a new one if needed and set the heir
+                Tidpool = case gen_server:call(ets_master_srv, {get, Name}) of     
+                    {ok, Value}       ->
+                                        Value;
+                    {not_found, Pid}  ->
+                                        ets:new(Name, [                            
+                                                        public
+                                                        ,{keypos, #address.ip}
+                                                        ,{heir, Pid, {name, Name}}
+                                                        ])
+                end,
+                {ok, State#st{ pool = Tidpool }, Opts};
+        false ->
+                {error, no_ets_name}
+    end.
 
 %% Open or recreate a DETS file to persist lease information
-state_init({leasesname, Name, File}, #st{ id = Id } = State) -> 
-
-    io:format("[~p]: Creating DETS leases table named ~p..\n", [Id, Name]),
-    %% Open lease file or die..
-    {ok, Tidleases} = dets:open_file(Name, [
-                                                  {keypos, #lease.clientid}
-                                                 ,{file, File}
-                                            ]),
-
-    State#st{ leases =  Tidleases };
-
+init_leases_table(#st{ id = Id} = State, Opts) ->
+    case proplists:is_defined(leasesname, Opts) of
+        true ->
+                {leasesname, Name, File } = proplists:lookup(leasesname, Opts),
+                io:format("[~p]: Creating DETS leases table named ~p..\n", [Id, Name]),
+                %% Open lease file or die..
+                {ok, Tidleases} = dets:open_file(Name, [
+                                                         {keypos, #lease.clientid}
+                                                        ,{file, File}
+                                                        ]),
+                {ok, State#st{ leases =  Tidleases }, Opts};
+        false ->
+                {error, no_dets_name}
+    end.
 
 %% Populate the ETS table with free addresses         
-state_init({range, Start, End}, #st{ id = Id, pool = Tid } = State) ->
-    io:format("[~p]: Populating pool from ~p to ~p..\n", [Id,Start,End]),
-    pool_populate(
-                     Tid
-                    ,fun(IP) -> %%io:format("[~p]: Population pool with address ~p\n",[Id, IP]),
-                                #address{ ip = IP, status = free } end
-                    ,Start
-                    ,End
-                    ),
-    State;
+init_range(#st{id = Id, pool = Tid } = State, Opts) ->
+    case proplists:is_defined(range, Opts) of
+        true -> 
+                {range, Start, End} = proplists:lookup(range, Opts),
+                io:format("[~p]: Populating pool from ~p to ~p..\n", [Id,Start,End]),
+                pool_populate(
+                                 Tid
+                                ,fun(IP) -> %%io:format("[~p]: Population pool with address ~p\n",[Id, IP]),
+                                            #address{ ip = IP, status = free } end
+                                ,Start
+                                ,End ),
+                {ok, State, Opts};
+        false -> {error, no_range}
+    end.
 
-%% record the pool client options
-state_init({options, Options}, #st{ id = Id } = State) ->
-    lists:foreach(
-                    fun(I) -> io:format("[~p]: option: ~p\n",[Id, I]) end,
-                    Options
-                ),
-    State#st{ options = Options };
+%% store pool client options
+init_options(#st{ id = Id } = State, Opts) ->
+    case proplists:is_defined(options, Opts) of
+        true -> 
+                Options =  proplists:get_value(options, Opts),
+                lists:foreach(
+                                fun(I) -> io:format("[~p]: option: ~p\n",[Id, I]) end,
+                                Options ),
+                {ok, State#st{ options = Options }, Opts};
+        false -> 
+                {error, no_pool_options }
+    end.
 
-state_init(Tuple,#st{ id = Id } = State) ->
-    io:format("[~p]: Unknow Pool setting ~p:\n", [Id,Tuple]),
-    State.
+%% Transfer leases to pool folding over the dets table to avoid collecting large results
+init_leases(#st{ id = Id, options = Options, leases = Tidleases } = State, Opts) ->
+    io:format("[~p]: Transferring client leases to ETS pool.\n",[Id]),
+    Now = calendar:datetime_to_gregorian_seconds({date(), time()}),
+    dets:foldl(
+                fun(Lease, Acc) -> case Lease#lease.expires > Now of
+                                   %% Populate the pool with the address extracted from the list
+                                   true  -> 
+                                            pool_update(State, #address{ 
+                                                             ip       = Lease#lease.ip
+                                                            ,options  = Options
+                                                            ,lease    = Lease
+                                                            }),
+                                    Acc;
+                                    false ->
+                                            leases_remove(State, Lease#lease.clientid)
+                                    end
+                end
+                ,[]
+                ,Tidleases),
+    {ok, State, Opts}.
+
 
 %% Lookup pattern matching againt some specified address template
 pool_lookup(#st{ pool = Tid }, Pattern) ->
@@ -205,8 +277,8 @@ pool_lookup_ip(State, Ip) ->
         [Address] when Address#address.status == offered -> {offered, Address};
         _                                                -> not_found
     end.
-%% Insert or replace an addres object in the pool
-pool_insert(State, Address) when is_record(Address, address) ->
+%% Replace an addres object in the pool
+pool_update(State, Address) when is_record(Address, address) ->
     ets:insert(State#st.pool, Address).
 
 %% Populate the given table with address records on a given status (provided by a fun)
@@ -234,25 +306,6 @@ leases_insert(State, Lease) when is_record(Lease, lease) ->
 leases_remove(State, Id) -> 
     ok = dets:delete(State#st.leases, Id).
 
-%% Transfer leases to pool folding over the dets table to avoid collecting large results
-leases_to_pool(#st{ id = Id, options = Options, leases = Tidleases } = State) ->
-    io:format("[~p]: Transferring client leases to ETS pool.\n",[Id]),
-    Now = calendar:datetime_to_gregorian_seconds({date(), time()}),
-    dets:foldl(
-                fun(Lease, Acc) -> case Lease#lease.expires > Now of
-                                   %% Populate the pool with the address extracted from the list
-                                   true  -> 
-                                            pool_insert(State, #address{ 
-                                                             ip       = Lease#lease.ip
-                                                            ,options  = Options
-                                                            ,lease    = Lease
-                                                            }),
-                                    Acc;
-                                    false -> leases_remove(State, Lease#lease.clientid)
-                                    end
-                end
-                ,[]
-                ,Tidleases).
 
 
 %% Try to select the first free IP address available
@@ -262,6 +315,7 @@ select_address(State, _ClientId, {0, 0, 0, 0}) ->
         [Addr]        -> {ok, #address{ ip = Addr, status = free, options = State#st.options}};
         not_found     -> {error, "No address is available for this request"}
     end;
+
 
 %% Try to select the client requested IP if posible.
 select_address(#st{ options = Options } = State, ClientId, RequestedIP) ->
@@ -292,7 +346,7 @@ select_address(#st{ options = Options } = State, ClientId, RequestedIP) ->
 
 %% Mark an address as offered and commit to leases file (should'nt be committed by now, I have to check this out)
 reserve_address(State, Address, ClientId) when is_record(Address, address) ->
-    pool_insert(State, Address#address{status = offered}),
+    pool_update(State, Address#address{status = offered}),
     
     Now     = calendar:datetime_to_gregorian_seconds({date(), time()}),
     Expires = Now + 300, %% 5 minutes ? I have to check this out
@@ -318,9 +372,10 @@ allocate_address(State, Address, ClientId) ->
         Expires = Now + LeaseTime,
         Lease   = #lease{ clientid = ClientId, ip = Address#address.ip, expires = Expires},
         leases_insert(State, Lease),
-        pool_insert(State, Address#address{status = allocated}),
+        pool_update(State, Address#address{status = allocated}),
         {ok, Address#address.ip, Address#address.options }
     end.
+
 
 
 
