@@ -34,20 +34,24 @@ start_link(Opts) ->
 %% ------------------------------------------------------------------
 
 init(_Opts) ->
-	io:format("~p: Init..\n", [?MODULE]),
+	io:format("[~p]: Init..\n", [?MODULE]),
 
     {ok, #st{ tables = dict:new() }}.
 
 %% Tell a process the Tid of a table (if we know that)
 handle_call({get, Name}, From, #st{ tables = Tables} = State) ->
 	Result = case dict:find(Name, Tables) of
-			{ok, Value} -> {ok, Value};
-			error       -> {not_found, self()}
+			{ok, Value} -> 
+                            io:format("[~p]: Pid ~p asked for ~p, we sent ~p..\n", [?MODULE, From, Name, Value]),
+                            {ok, Value};
+			error       ->
+                            io:format("[~p]: Pid ~p asked for ~p, we sent ~p..\n", [?MODULE, From, Name, not_found]),
+                            {not_found, self()}
 			end,
 	{reply, Result, State};
 
 %% Remove a Table in case the process wants to close it
-handle_call({remove, Name}, From, #st{ tables = Tables} = State) ->	
+handle_call({remove, Name}, _From, #st{ tables = Tables} = State) ->	
     {reply, ok, State#st{ tables = dict:erase(Name,Tables) }};
 
 handle_call(_Request, _From, State) ->
