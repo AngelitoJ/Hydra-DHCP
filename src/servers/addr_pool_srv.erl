@@ -218,13 +218,13 @@ init_range(#st{id = Id, pool = Tid } = State, Opts) ->
     case proplists:is_defined(range, Opts) of
         true -> 
                 {range, Start, End} = proplists:lookup(range, Opts),
-                io:format("[~p]: Populating pool from ~p to ~p..\n", [Id,Start,End]),
-                pool_populate(
+                Entries = pool_populate(
                                  Tid
                                 ,fun(IP) -> %%io:format("[~p]: Population pool with address ~p\n",[Id, IP]),
                                             #address{ ip = IP, status = free } end
                                 ,Start
                                 ,End ),
+                io:format("[~p]: Populating pool from ~p to ~p.. (~p entries)\n", [Id,Start,End, Entries]),
                 {ok, State, Opts};
         false -> {error, no_range}
     end.
@@ -244,9 +244,8 @@ init_options(#st{ id = Id } = State, Opts) ->
 
 %% Transfer leases to pool folding over the dets table to avoid collecting large results
 init_leases(#st{ id = Id, options = Options, leases = Tidleases } = State, Opts) ->
-    io:format("[~p]: Transferring client leases to ETS pool.\n",[Id]),
     Now = calendar:datetime_to_gregorian_seconds({date(), time()}),
-    dets:foldl(
+    Entries = dets:foldl(
                 fun(Lease, Acc) -> case Lease#lease.expires > Now of
                                    %% Populate the pool with the address extracted from the list
                                    true  -> 
@@ -255,13 +254,15 @@ init_leases(#st{ id = Id, options = Options, leases = Tidleases } = State, Opts)
                                                             ,options  = Options
                                                             ,lease    = Lease
                                                             }),
-                                    Acc;
+                                            Acc + 1;
                                     false ->
-                                            leases_remove(State, Lease#lease.clientid)
+                                            leases_remove(State, Lease#lease.clientid),
+                                            Acc
                                     end
                 end
-                ,[]
+                ,0
                 ,Tidleases),
+    io:format("[~p]: Transferring active client leases to ETS pool (~p entries).\n",[Id, Entries]),
     {ok, State, Opts}.
 
 
@@ -285,12 +286,14 @@ pool_update(State, Address) when is_record(Address, address) ->
 
 %% Populate the given table with address records on a given status (provided by a fun)
 %% use explicit tail recursion to avoid building a large list
-pool_populate(Tid, Fun, Addr, Addr) when is_function(Fun) ->
-    ets:insert(Tid, Fun(Addr));
-
-pool_populate(Tid, Fun, Addr, End) ->
+pool_populate(Tid, Fun, Start, End) when is_function(Fun) ->
+    pool_populate(Tid, Fun, Start, End, 1).
+pool_populate(Tid, Fun, Addr, Addr, I)  ->
     ets:insert(Tid, Fun(Addr)),
-    pool_populate(Tid, Fun, ipv4_succ(Addr), End).
+    I;
+pool_populate(Tid, Fun, Addr, End, I) ->
+    ets:insert(Tid, Fun(Addr)),
+    pool_populate(Tid, Fun, ipv4_succ(Addr), End, I+1).
 
 %% Lookup a client lease and tag it accordingly ok | expired | not_found
 leases_lookup(State, Id, Now) ->
