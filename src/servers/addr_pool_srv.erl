@@ -70,8 +70,10 @@ init(Opts) ->
         {error, Reason} -> {stop, Reason}
     end.
 
-
-
+%% give a fun suitable to select this pool
+handle_call(selection_fun, _From, State) ->
+    Fun = fun(Record) -> true end,
+    {reply, Fun ,State};
 
 %% Look for a suitable free address for the client (client can request one) and mark it as offered.
 handle_call({reserve, ClientId, RequestedIP}, _From, State) ->
