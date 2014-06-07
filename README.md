@@ -27,16 +27,38 @@ DONE : The component is finished[1] and seems to perform as designed but can con
 QA   : The component is subject to major unit testing
 
 
-- Escript fronted                 : DONE  
+- Escript fronted                 : DONE
+	- Command-line parsing , and complete statup and shutdoen of the bundle OTP application. 
 - Cross module get-opt            : DONE
+	- Gathering of options specs across all bundled modules.
 - Main OTP tree                   : DONE
+	- Simple (non distributed) applicaction startup with config data provided from escript frontend.
 - Console server                  : SETUP
 - Table master                    : DONE
+	- Simple inheritance from process deaths , and service of ETS table identifiers to any process.
 - UDP Driver                      : SETUP
+	- UDP port configurable via command-line.
+	- Iface and server ID configuration in progress.
 - Middleman DHCP encoder / decoder: SETUP
 - DORA Cache manager              : SETUP
 - DORA DHCP State machine         : SETUP
-- Address Pool Server             : WIP  (Address selection and reservation)
+- Address Pool Servers             : WIP  
+	- 'Simple pool type' this type manages a simple range of IP's, and a list of options usimg a ETS table and a DETS table to persist lease information. Simple format suitable for file:consult() usage
+	-{ pooldata,{simplepool, [
+						 {name, "Universidad"}
+        				,{range, {192,168,1,2}, {192,168,1,253}}
+						,{options, [ 
+					 		         {lease_time, 3600}
+          					        ,{renewal_time, 1800}
+          					        ,{rebinding_time, 3000}
+          					        ,{subnet_mask, {255, 255, 255, 0}}
+          					        ,{broadcast_address, {192, 168, 1, 255}}
+          					        ,{dns_server, {192, 168, 1, 1}}
+          					        ,{domain_name, "uah.es"}
+          					        ,{router, {192, 168, 1, 254}}
+          					         ]} ]}
+    - Init functions terminated ( file parse, load and state/tables population) 
+
 
 
 
@@ -85,7 +107,7 @@ Basic application architecture
 	1. UDP_DRV_SRV
 		- One per UDP port served (currently on UDP port), dispatch UDP messages between network hosts and erlang processes.
 	2. MIDDLEMAN_SRV
-		- At least one per core, transform UDP message to erlang terms and viceversa, and talks (async) to DORA finite state machines.
+		- At least one per core, transform UDP message into erlang terms and viceversa, and talks (async) to DORA finite state machines.
 	3. DORA_FSM
 		- One per active client, manage the entire DHCP exchange state machine (a.k.a DORA) and talks (sync) to pool servers
 		 to get leases.
