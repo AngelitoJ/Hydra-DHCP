@@ -50,21 +50,20 @@ start_link(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Opts) ->
-    Result = lists:foldl(
-                             fun bind/2              %% chain computations folding funs over the inital state
-                            ,{ok, #st{}, Opts}       %% initial state
-                            ,[                       %% init funs
-                                 fun init_id/2
-                                ,fun init_filepath/2
-                                ,fun init_simple_pool/2
-                                ,fun init_table_names/2
-                                ,fun init_addrs_table/2
-                                ,fun init_leases_table/2
-                                ,fun init_range/2
-                                ,fun init_options/2
-                                ,fun init_leases/2
-                            ]
-                        ),
+    Result = sequence(
+                         {ok, #st{}, Opts}
+                        ,[                       
+                             fun init_id/2
+                            ,fun init_filepath/2
+                            ,fun init_simple_pool/2
+                            ,fun init_table_names/2
+                            ,fun init_addrs_table/2
+                            ,fun init_leases_table/2
+                            ,fun init_range/2
+                            ,fun init_options/2
+                            ,fun init_leases/2
+                        ]),
+
     case Result of
         {ok, State, _} -> {ok, State};
         {error, Reason} -> {stop, Reason}
@@ -128,6 +127,10 @@ code_change(_OldVsn, State, _Extra) ->
 %% A n'Either State a' monadic binding in Erlang..
 bind(Fun, {ok, State, Opts}) when is_function(Fun) -> Fun(State, Opts);
 bind(_, {error, _} = Other) -> Other.  
+
+sequence(Initial, Computations) ->
+    lists:foldl(fun bind/2, Initial, Computations).
+
 
 %% Setup process is and pool identity 
 init_id(State, Opts) ->
