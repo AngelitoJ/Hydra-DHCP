@@ -248,6 +248,7 @@ Authors
 References
 ==========
 
-- "Erlang Programming", Cesarini, Thompson, 2009, O’Reilly. 
+- "Erlang Programming", Cesarini, Thompson, 2009, O’Reilly.
+- "The DHCP Handbook 2nd Ed.", Droms n Lemon, 2003, Sams.  
 - "IP ADDRESS MANAGEMENT Principles and Practice", Rooney, 2011, IEEE Press.
 - RFC 2131, 6361
