@@ -194,7 +194,7 @@ record_to_msg(#dhcp_packet{ msg_type = MessageType } = Packet) ->
 get_client_id(#dhcp_packet{ chaddr = HWid, options = Opts }) -> 
     case dhcp_options:search(client_id,Opts) of
         {client_id, Clientid} ->
-                                Clientid
+                                Clientid;
         not_found             ->
                                 HWid
     end. 
