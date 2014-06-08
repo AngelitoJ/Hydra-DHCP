@@ -29,10 +29,11 @@
 
 -record(st, { 
                  id          = undefined  %% Client id this FSM is managing
-                ,ip          = undefined
+                ,addr        = undefined
                 ,options     = undefined
                 ,addr_server = undefined
                 ,server_id   = undefined
+                ,request     = undefined
                 ,pools       = []         %% a list of funs used to select the right pool
                 }).
 
@@ -49,17 +50,17 @@ start_link(Opts) when is_list(Opts) ->
 %% ------------------------------------------------------------------
 
 init(Opts) when is_list(Opts) ->
-   Result = lists:foldl(
-                             fun bind/2              %% chain computations folding funs over the inital state
-                            ,{ok, #st{}, Opts}       %% initial state
-                            ,[                       %% init funs
-                                 fun init_id/2
-                                ,fun init_pool/2
-                            ]
-                        ),
+    Result = sequence(
+                        {ok, #st{}, Opts}
+                        ,[
+                             fun init_id/2
+                            ,fun init_pool/2
+                        ]),
     case Result of
-        {ok, State, _} -> {ok, idle, State, 30000 };
-        {error, Reason} -> {stop, Reason}
+        {ok, State, _} ->
+                            {ok, idle, State, 30000 };
+        {error, Reason} ->
+                            {stop, Reason}
     end.
 
 %% Timeout while in idle state, we stop and finish
@@ -70,37 +71,46 @@ idle(timeout, State) ->
 
 %% Receive discover while in idle state, process request and change state accordingly.
 idle({discover, MyPid, Packet}, #st{ id = Id, pools = Pools } = State) ->
-    case select_pool(Pools, Id, Packet) of                                      
-        {ok, PoolPid} ->                                                         %% We got suitable pool for this client
-                        {ok, Addr, Opts} = pool_get_addr(PoolPid),               %% get an addres and a list of options
-                        ok               = pool_mark(PoolPid, Addr, offered),   %% mark as offered the address
-                        ok               = send_offer(MyPid, Packet, Addr, Opts),%% reply to the caller with a offer message
-                        ?STATE_TRACE(Id, discover, idle, offer),                 %% transition to offer state
-                        {next_state, offer, State#st{ ip = Addr, options = Opts, addr_server = PoolPid }, 30000};     %% Timeout if client does not reply in 30 sec 
-        {no_pool}     ->                                                         %% No pool for this client
-                        ?STATE_TRACE(Id, discover, idle, stop),                  %% finish here
-                        {stop, normal, State}
+    Result = sequence(
+                        {ok, State#st{ request = Packet }, []}         %% initial state
+                        ,[                       
+                             fun select_pool/2
+                            ,fun pool_get_addr/2
+                            ,fun pool_mark_offered/2
+                        ]),
+    case Result of
+        {ok, State, _} ->
+                            ok = send_ack(State),
+                            ?STATE_TRACE(Id, discover, idle, offer),          %% transition to offer state
+                            {next_state, offer, State, 30000};                %% timeout if client does not reply in 30 sec
+        {error, no_pool} ->
+                            ?STATE_TRACE(Id, discover, idle, stop),           %% finish here
+                            {stop, normal, State};
+        {error, Reason} ->
+                            ?STATE_TRACE(Id, discover, idle, stop),           %% 
+                            {stop, Reason, State}
     end;
+
 
 
 idle({inform, MyPid, Packet}, #st{ id = Id } = State) ->
     ?STATE_TRACE(Id, inform, idle, idle),
     {next_state, idle, State};
 
-idle({request, init_reboot, MyPid, Packet}, #st{ id = Id } = State) ->
+idle({request, init_reboot, MyPid, Packet}, #st{ id = Id, pools = Pools} = State) ->
     case select_pool(Pools, Id, Packet) of
         {ok, PoolPid} ->
                         case pool_check_addr(PoolPid, get_request_addr(Packet)) of
                             {ok, Addr, Opts} ->
-                                                ok = send_ack(MyPid, Packet, Addr, Options),
+                                                ok = send_ack(MyPid, Packet, Addr, Opts),
                                                 ?STATE_TRACE(Id, request, idle, bound),
                                                 {next_state, bound, State};
                             {no_lease}       ->
                                                 send_nack(MyPid, Packet, no_lease),
                                                 ?STATE_TRACE(Id, request, idle, idle),
-                                                {next_state, idle, State};
-                        end
-        {no_pool} ->
+                                                {next_state, idle, State}
+                        end;
+        no_pool ->
                     send_nack(MyPid, Packet, no_pool),
                     ?STATE_TRACE(Id, request, idle, idle),
                     {next_state, idle, State}
@@ -111,12 +121,12 @@ idle(Any, #st{ id = Id } = State) ->
     {next_state, idle, State}.
 
 %% Timeout in offer state , the client has never responded we free the offered IP and go back to idle
-offer(timeout, #st{ id = Id, ip = Addr, addr_server = AddrPid} = State) ->
+offer(timeout, #st{ id = Id, addr = Addr, addr_server = AddrPid} = State) ->
     ok = pool_mark(AddrPid, Addr, free),
     ?STATE_TRACE(Id, timeout, offer, idle),
-    {next_state, idle, State#st{ ip = undefined, addr_server = undefined , options = undefined } , 30000 };
+    {next_state, idle, State#st{ addr = undefined, addr_server = undefined , options = undefined } , 30000 };
 
-offer({request, selecting, MyPid, Packet}, #st{ id = Id, ip = Addr, server_id = Serverid , addr_server = PoolPid } = State) ->
+offer({request, selecting, MyPid, Packet}, #st{ id = Id, addr = Addr, server_id = Serverid , addr_server = PoolPid } = State) ->
     case get_serverid(Packet) == Serverid of
         true ->                                            %% Client have choosen our offer
                 {ok, Addr, Options} = pool_mark(PoolPid, Addr, allocated),
@@ -203,6 +213,8 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 bind(Fun, {ok, State, Opts}) when is_function(Fun) -> Fun(State, Opts);
 bind(_, {error, _} = Other) -> Other.  
 
+sequence(Initial, Computations) ->
+    lists:foldl(fun bind/2, Initial, Computations).
 
 init_id(State, Opts) ->
     case proplists:is_defined(client_id,Opts) of
@@ -236,7 +248,7 @@ init_pool(#st{ id = Id} = State, Opts) ->
 
 
 %% Get suitable pool server for this request.
-select_pool(Pools, Id, Packet) ->
+select_pool({ pools = Pools, id = Id, request = Packet} = State, Opts) ->
     Pids = lists:fold(
                     fun({Pid, Fun}, Acc) ->
                                     case Fun(Id, Packet) of
@@ -249,18 +261,37 @@ select_pool(Pools, Id, Packet) ->
                     ,Pools),
     case Pids of 
         []    ->
-                no_pool;          %% give no_pool to the caller
+                {error, no_pool};                                    %% give no_pool to the caller
         [H|T] ->
-                H                 %% Select the first Pid available 
+                {ok, State#st{ addr_server = H}, Opts}                 %% Select the first Pid available 
     end.
 
 
-pool_get_addr(_) -> undefined.
-pool_mark(_,_,_) -> undefined.
-send_offer(_,_,_,_) -> undefined.
-send_ack(_,_,_,_) -> undefined.
-get_serverid(_) -> undefined.
+pool_get_addr(State, Opts) -> 
+    case true of
+        {ok, Addr, Opts2} ->
+                {ok, State#st{ addr = Addr, options = Opts2 }, Opts};
+        false ->
+                {error, no_pool}
+    end.
 
+pool_mark_offered(State, Opts) ->
+    case true of
+        ok              ->
+                            {ok, State, Opts};
+        {error, Reason} ->
+                            {error, Reason}
+    end.
+
+select_pool(_,_,_) -> undefined.
+pool_check_addr(_,_) -> undefined.
+send_offer(_,_,_,_) -> undefined.
+send_ack(_) -> undefined.
+send_ack(_,_,_,_) -> undefined.
+send_nack(_,_,_) -> undefined.
+get_serverid(_) -> undefined.
+get_request_addr(_) -> undefined.
+pool_mark(_,_,_) -> undefined.
 
 
 
