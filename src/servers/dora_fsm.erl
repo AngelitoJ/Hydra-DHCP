@@ -65,22 +65,22 @@ init(Opts) when is_list(Opts) ->
 %% Timeout while in idle state, we stop and finish
 idle(timeout, State) ->
     ?STATE_TRACE(Id, timeout, idle, stop),
-    {stop, normal}.
+    {stop, normal};
 
 
 %% Receive discover while in idle state, process request and change state accordingly.
 idle({discover, MyPid, Packet}, #st{ id = Id, pools = Pools } = State) ->
     case select_pool(Pools, Id, Packet) of                                      
-        {ok, AddrPid} ->                                                         %% We got suitable pool for this client
-                        {ok, Addr, Opts} = pool_get_addr(AddrPid),               %% get an addres and a list of options
-                        ok               = pool_mark(AddrPid, Addrs, offered),   %% mark as offered the address
-                        ok               = send_offer(Mypid, Packet, Addr, Opts),%% reply to the caller with a offer message
+        {ok, PoolPid} ->                                                         %% We got suitable pool for this client
+                        {ok, Addr, Opts} = pool_get_addr(PoolPid),               %% get an addres and a list of options
+                        ok               = pool_mark(PoolPid, Addr, offered),   %% mark as offered the address
+                        ok               = send_offer(MyPid, Packet, Addr, Opts),%% reply to the caller with a offer message
                         ?STATE_TRACE(Id, discover, idle, offer),                 %% transition to offer state
                         {next_state, offer, State#st{ ip = Addr, options = Opts, addr_server = PoolPid }, 30000};     %% Timeout if client does not reply in 30 sec 
         {no_pool}     ->                                                         %% No pool for this client
                         ?STATE_TRACE(Id, discover, idle, stop),                  %% finish here
                         {stop, normal, State}
-    end.
+    end;
 
 
 idle({inform, MyPid, Packet}, #st{ id = Id } = State) ->
@@ -88,13 +88,22 @@ idle({inform, MyPid, Packet}, #st{ id = Id } = State) ->
     {next_state, idle, State};
 
 idle({request, init_reboot, MyPid, Packet}, #st{ id = Id } = State) ->
-    case true of
-        true ->
-            ?STATE_TRACE(Id, request, idle, bound),
-            {next_state, bound, State};
-        false ->
-            ?STATE_TRACE(Id, request, idle, idle),
-            {next_state, idle, State}
+    case select_pool(Pools, Id, Packet) of
+        {ok, PoolPid} ->
+                        case pool_check_addr(PoolPid, get_request_addr(Packet)) of
+                            {ok, Addr, Opts} ->
+                                                ok = send_ack(MyPid, Packet, Addr, Options),
+                                                ?STATE_TRACE(Id, request, idle, bound),
+                                                {next_state, bound, State};
+                            {no_lease}       ->
+                                                send_nack(MyPid, Packet, no_lease),
+                                                ?STATE_TRACE(Id, request, idle, idle),
+                                                {next_state, idle, State};
+                        end
+        {no_pool} ->
+                    send_nack(MyPid, Packet, no_pool),
+                    ?STATE_TRACE(Id, request, idle, idle),
+                    {next_state, idle, State}
     end;
 
 idle(Any, #st{ id = Id } = State) ->
@@ -227,15 +236,15 @@ init_pool(#st{ id = Id} = State, Opts) ->
 
 
 %% Get suitable pool server for this request.
-pool_select(Pools, Id, Packet) ->
+select_pool(Pools, Id, Packet) ->
     Pids = lists:fold(
                     fun({Pid, Fun}, Acc) ->
                                     case Fun(Id, Packet) of
                                         true  ->
-                                                Pid|Acc];
+                                                [Pid|Acc];
                                         false ->
                                                 Acc
-                                    end, end 
+                                    end end 
                     ,[]
                     ,Pools),
     case Pids of 
@@ -246,8 +255,11 @@ pool_select(Pools, Id, Packet) ->
     end.
 
 
-pool_get_addr()
-
+pool_get_addr(_) -> undefined.
+pool_mark(_,_,_) -> undefined.
+send_offer(_,_,_,_) -> undefined.
+send_ack(_,_,_,_) -> undefined.
+get_serverid(_) -> undefined.
 
 
 
