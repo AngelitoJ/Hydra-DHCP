@@ -17,15 +17,14 @@
 %% gen_fsm Function Exports
 %% ------------------------------------------------------------------
 
--export([init/1, state_name/2, state_name/3, handle_event/3,
-         handle_sync_event/4, handle_info/3, terminate/3,
-         code_change/4]).
+-export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
 -export([idle/2, offer/2, bound/2]).
 
 
 -define(STATE_TRACE(Id, EV, CUR, NEXT), io:format("Id: Received EV while in CUR state, going to NEXT\n", [])).
 
+-include("dhcp_messages.hrl").
 
 -record(st, { 
                  id          = undefined  %% Client id this FSM is managing
@@ -33,7 +32,6 @@
                 ,options     = undefined
                 ,addr_server = undefined
                 ,server_id   = undefined
-                ,request     = undefined
                 ,pools       = []         %% a list of funs used to select the right pool
                 }).
 
@@ -57,8 +55,8 @@ init(Opts) when is_list(Opts) ->
                             ,fun init_pool/2
                         ]),
     case Result of
-        {ok, State, _} ->
-                            {ok, idle, State, 30000 };
+        {ok, NewState, _} ->
+                            {ok, idle, NewState, 30000 };
         {error, Reason} ->
                             {stop, Reason}
     end.
@@ -66,23 +64,22 @@ init(Opts) when is_list(Opts) ->
 %% Timeout while in idle state, we stop and finish
 idle(timeout, State) ->
     ?STATE_TRACE(Id, timeout, idle, stop),
-    {stop, normal};
+    {stop, normal, State};
 
 
 %% Receive discover while in idle state, process request and change state accordingly.
-idle({discover, MyPid, Packet}, #st{ id = Id, pools = Pools } = State) ->
+idle({discover, MyPid, Packet}, #st{ id = Id } = State) ->
     Result = sequence(
-                        {ok, State#st{ request = Packet }, []}         %% initial state
+                        {ok, State, Packet}         %% initial state
                         ,[                       
                              fun select_pool/2
-                            ,fun pool_get_addr/2
-                            ,fun pool_mark_offered/2
+                            ,fun pool_reserve_addr/2
                         ]),
     case Result of
-        {ok, State, _} ->
-                            ok = send_ack(State),
+        {ok, NewState, _} ->
+                            ok = send_ack(NewState),
                             ?STATE_TRACE(Id, discover, idle, offer),          %% transition to offer state
-                            {next_state, offer, State, 30000};                %% timeout if client does not reply in 30 sec
+                            {next_state, offer, NewState, 30000};                %% timeout if client does not reply in 30 sec
         {error, no_pool} ->
                             ?STATE_TRACE(Id, discover, idle, stop),           %% finish here
                             {stop, normal, State};
@@ -98,50 +95,68 @@ idle({inform, MyPid, Packet}, #st{ id = Id } = State) ->
     {next_state, idle, State};
 
 idle({request, init_reboot, MyPid, Packet}, #st{ id = Id, pools = Pools} = State) ->
-    case select_pool(Pools, Id, Packet) of
-        {ok, PoolPid} ->
-                        case pool_check_addr(PoolPid, get_request_addr(Packet)) of
-                            {ok, Addr, Opts} ->
-                                                ok = send_ack(MyPid, Packet, Addr, Opts),
-                                                ?STATE_TRACE(Id, request, idle, bound),
-                                                {next_state, bound, State};
-                            {no_lease}       ->
-                                                send_nack(MyPid, Packet, no_lease),
-                                                ?STATE_TRACE(Id, request, idle, idle),
-                                                {next_state, idle, State}
-                        end;
-        no_pool ->
-                    send_nack(MyPid, Packet, no_pool),
-                    ?STATE_TRACE(Id, request, idle, idle),
-                    {next_state, idle, State}
+    Result = sequence(
+                        {ok, State, Packet}         %% initial state
+                        ,[                       
+                             fun select_pool/2
+                            ,fun pool_check_addr/2
+                        ]),
+    case Result of
+        {ok, NewState, _} ->
+                            send_ack(NewState),
+                            ?STATE_TRACE(Id, request, idle, bound),
+                            {next_state, bound, NewState, 30000};
+        {error, no_pool} ->
+                            send_nack(State, no_pool),
+                            ?STATE_TRACE(Id, request, idle, idle),   
+                            {next_state, idle, State};
+        {error, no_lease} ->
+                            send_nack(State, no_lease),
+                            ?STATE_TRACE(Id, request, idle, idle),
+                            {next_state, idle, State}
     end;
 
 idle(Any, #st{ id = Id } = State) ->
     io:format("[~p]: Received this: ~p while in idle state, doing nothing",[Id,Any]),
     {next_state, idle, State}.
 
-%% Timeout in offer state , the client has never responded we free the offered IP and go back to idle
+%% Timeout in offer state , the client has never responded, so we free the offered IP and go back to idle
 offer(timeout, #st{ id = Id, addr = Addr, addr_server = AddrPid} = State) ->
-    ok = pool_mark(AddrPid, Addr, free),
-    ?STATE_TRACE(Id, timeout, offer, idle),
-    {next_state, idle, State#st{ addr = undefined, addr_server = undefined , options = undefined } , 30000 };
-
-offer({request, selecting, MyPid, Packet}, #st{ id = Id, addr = Addr, server_id = Serverid , addr_server = PoolPid } = State) ->
-    case get_serverid(Packet) == Serverid of
-        true ->                                            %% Client have choosen our offer
-                {ok, Addr, Options} = pool_mark(PoolPid, Addr, allocated),
-                ok                  = send_ack(MyPid, Packet, Addr, Options),
-                ?STATE_TRACE(Id, request, offer, bound),
-                {next_state, bound, State};
-        false ->                                           %% Client ignored our offer
-                ok = pool_mark(PoolPid, Addr, free),
-                ?STATE_TRACE(Id, request, offer, stop),
-                {stop, normal, State}
+    Result = sequence(
+                        {ok, State, []}         %% initial state
+                        ,[                       
+                             fun pool_free_addr/2
+                        ]),
+    case Result of
+        {ok, NewState, _} ->
+                            ?STATE_TRACE(Id, timeout, offer, idle),
+                            {next_state, bound, NewState, 30000};
+        {error, Reason} ->
+                            ?STATE_TRACE(Id, timeout, offer, stop),
+                            {stop, Reason, State}
     end;
 
-%%offer({ignore, MyPid, Packet}, #st{ id = Id } = State) ->
-%%    ?STATE_TRACE(Id, ignore, offer, stop),
-%%    {stop, ignored, State};
+offer({request, selecting, MyPid, Packet}, #st{ id = Id } = State) ->
+    Result = sequence(
+                        {ok, State, Packet}         %% initial state
+                        ,[                       
+                             fun is_server_selected/2
+                            ,fun pool_allocate_addr/2
+                        ]),
+    case Result of
+        {ok, NewState, _} ->
+                            send_ack(NewState, MyPid),
+                            ?STATE_TRACE(Id, request, offer, bound),
+                            {next_state, bound, NewState};
+        {error, ignore}   ->
+                            ?STATE_TRACE(Id, ignore, offer, offer),
+                            {next_state, offer, State, 1000};         %% setup timer in offre state to force address release on timeout
+
+        {error, Reason}   ->
+                            send_nack(State, MyPid),
+                            ?STATE_TRACE(Id, request, offer, stop),
+                            {next_state, idle, State}
+    end;
 
 offer(Any, #st{ id = Id } = State) ->
     io:format("[~p]: Received this: ~p while in offer state, doing nothing",[Id,Any]),
@@ -150,23 +165,38 @@ offer(Any, #st{ id = Id } = State) ->
 
 
 bound({request, renewing, MyPid, Packet}, #st{ id = Id } = State) ->
-    case true of
-        true ->
-            ?STATE_TRACE(Id, request, bound, bound),
-            {next_state, bound, State};
-        false ->
-            ?STATE_TRACE(Id, request, bound, idle),
-            {next_state, idle, State}
+    Result = sequence(
+                        {ok, State, Packet}         %% initial state
+                        ,[                       
+                             fun pool_extend_addr/2
+                        ]),
+    case Result of
+        {ok, NewState, _} ->
+                            send_ack(NewState, MyPid),
+                            ?STATE_TRACE(Id, request, bound, bound),
+                            {next_state, bound, NewState};
+        {error, Reason}   ->
+                            send_nack(State, MyPid),
+                            ?STATE_TRACE(Id, request, bound, idle),
+                            {next_state, idle, State}
     end;
 
 bound({request, rebinding, MyPid, Packet}, #st{ id = Id } = State) ->
-    case true of
-        true ->
-            ?STATE_TRACE(Id, request, bound, bound),
-            {next_state, bound, State};
-        false ->
-            ?STATE_TRACE(Id, request, bound, idle),
-            {next_state, idle, State}
+    Result = sequence(
+                        {ok, State, Packet}         %% initial state
+                        ,[                       
+                             fun is_server_selected/2
+                            ,fun pool_extend_addr/2
+                        ]),
+    case Result of
+        {ok, NewState, _} ->
+                            send_ack(NewState, MyPid),
+                            ?STATE_TRACE(Id, request, bound, bound),
+                            {next_state, bound, NewState};
+        {error, Reason}   ->
+                            send_nack(State, MyPid),
+                            ?STATE_TRACE(Id, request, bound, idle),
+                            {next_state, idle, State}
     end;
 
 bound({release, MyPid, Packet}, #st{ id = Id } = State) ->
@@ -174,20 +204,24 @@ bound({release, MyPid, Packet}, #st{ id = Id } = State) ->
     {next_state, idle, State};
 
 bound({decline, MyPid, Packet}, #st{ id = Id } = State) ->
-    ?STATE_TRACE(Id, decline, bound, idle),
-    io:format("~p: Received DECLINE while in BOUND state, going to IDLE\n", [Id]),
-    {next_state, idle, State};
+    Result = sequence(
+                        {ok, State, Packet}         %% initial state
+                        ,[                       
+                             fun pool_free_addr/2
+                        ]),
+    case Result of
+        {ok, NewState, _} ->
+                            ?STATE_TRACE(Id, decline, bound, idle),
+                            {next_state, idle, NewState};
+        {error, Reason} ->
+                            ?STATE_TRACE(Id, decline, bound, stop),
+                            {stop, Reason, State}
+    end;
 
 bound(Any, #st{ id = Id } = State) ->
     io:format("[~p]: Received this: ~p while in bound state, doing nothing",[Id,Any]),
-    {next_state, idle, State}.
+    {next_state, bound, State}.
 
-
-state_name(_Event, State) ->
-    {next_state, state_name, State}.
-
-state_name(_Event, _From, State) ->
-    {reply, ok, state_name, State}.
 
 handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
@@ -266,29 +300,48 @@ select_pool({ pools = Pools, id = Id, request = Packet} = State, Opts) ->
                 {ok, State#st{ addr_server = H}, Opts}                 %% Select the first Pid available 
     end.
 
-
-pool_get_addr(State, Opts) -> 
-    case true of
-        {ok, Addr, Opts2} ->
-                {ok, State#st{ addr = Addr, options = Opts2 }, Opts};
-        false ->
-                {error, no_pool}
+%% Try to check if the requested address is still suitable fot this client
+pool_check_addr(#st{ id = Id, addr_server = PoolPid } = State, #dhcp_packet{ rqaddr = Addr } = Packet) -> 
+    case gen_server:call(PoolPid,{check, Id, Addr}) of
+        {ok, Addr, Opts} ->
+                            {ok, State#st{ addr = Addr, options = Opts }, Packet};
+        {error, Reason}  ->
+                            {error, Reason}
+    end.
+%% Try reserve an address at the pool server, or signal the error
+pool_reserve_addr(#st{ id = Id, addr_server = PoolPid } = State, Aux) -> 
+    case gen_server:call(PoolPid, {reserve,Id}) of
+        {ok, Addr, Opts} ->
+                            {ok, State#st{ addr = Addr, options = Opts }, Aux};
+        false            ->
+                            {error, no_pool}
     end.
 
-pool_mark_offered(State, Opts) ->
-    case true of
-        ok              ->
-                            {ok, State, Opts};
-        {error, Reason} ->
+%% Try to allocate an address at the pool server or signal the error
+pool_allocate_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux) ->
+    case gen_server:call(PoolPid, {allocate, Id, Addr}) of
+        {ok, Addr, Opts} ->
+                            {ok, State, Aux};
+        {error, Reason}  ->
                             {error, Reason}
     end.
 
+
+%% Try to free an address at the pool server or signal the error
+pool_free_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux) ->
+    case gen_server:call(PoolPid, {free, Id, Addr}) of
+        ok              ->
+                            {ok, State#st{ addr = undefined, options = undefined}, Aux};
+        {error, Reason} ->
+                            {error, Reason}
+    end.
+pool_extend_addr(_,_) -> undefined.
+is_server_selected(_,_) -> undefined.
 select_pool(_,_,_) -> undefined.
-pool_check_addr(_,_) -> undefined.
 send_offer(_,_,_,_) -> undefined.
 send_ack(_) -> undefined.
-send_ack(_,_,_,_) -> undefined.
-send_nack(_,_,_) -> undefined.
+send_ack(_,_) -> undefined.
+send_nack(_,_) -> undefined.
 get_serverid(_) -> undefined.
 get_request_addr(_) -> undefined.
 pool_mark(_,_,_) -> undefined.
