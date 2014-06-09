@@ -200,8 +200,19 @@ bound({request, rebinding, MyPid, Packet}, #st{ id = Id } = State) ->
     end;
 
 bound({release, MyPid, Packet}, #st{ id = Id } = State) ->
-    ?STATE_TRACE(Id, release, bound, idle),
-    {next_state, idle, State};
+    Result = sequence(
+                        {ok, State, Packet}         %% initial state
+                        ,[                       
+                             fun pool_free_addr/2
+                        ]),
+    case Result of
+        {ok, NewState, _} ->
+                            ?STATE_TRACE(Id, release, bound, idle),
+                            {next_state, idle, NewState};
+        {error, Reason} ->
+                            ?STATE_TRACE(Id, release, bound, stop),
+                            {stop, Reason, State}
+    end;
 
 bound({decline, MyPid, Packet}, #st{ id = Id } = State) ->
     Result = sequence(
@@ -243,7 +254,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-%% An 'Either State a' monadic binding in Erlang..
+
 bind(Fun, {ok, State, Opts}) when is_function(Fun) -> Fun(State, Opts);
 bind(_, {error, _} = Other) -> Other.  
 
@@ -326,6 +337,21 @@ pool_allocate_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, A
                             {error, Reason}
     end.
 
+pool_extend_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux) ->
+    case gen_server:call(PoolPid, {extent, Id, Addr}) of
+        {ok, Addr, Opts} ->
+                            {ok, State, Aux};
+        {error, Reason}  ->
+                            {error, Reason}
+    end.
+
+
+pool_decline_addr(State, Aux) -> 
+    pool_free_addr(State, decline). 
+
+pool_release_addr(State, Aux) -> 
+    pool_free_addr(State, release). 
+
 
 %% Try to free an address at the pool server or signal the error
 pool_free_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux) ->
@@ -335,7 +361,7 @@ pool_free_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux) 
         {error, Reason} ->
                             {error, Reason}
     end.
-pool_extend_addr(_,_) -> undefined.
+
 is_server_selected(_,_) -> undefined.
 select_pool(_,_,_) -> undefined.
 send_offer(_,_,_,_) -> undefined.
