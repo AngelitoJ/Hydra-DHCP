@@ -28,7 +28,7 @@ start_link(Opts) ->  %% Opts is a property list
 %% ===================================================================
 
 init(Opts) ->
-    io:format("~p: Init..\n", [?MODULE]),
+    io:format("[~p]: Init..\n", [?MODULE]),
 
     {ok, { {rest_for_one, 5, 10},
     							[
