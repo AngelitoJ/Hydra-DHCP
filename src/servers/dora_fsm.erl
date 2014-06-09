@@ -337,6 +337,7 @@ pool_allocate_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, A
                             {error, Reason}
     end.
 
+%% Try to extend a lease for some address
 pool_extend_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux) ->
     case gen_server:call(PoolPid, {extent, Id, Addr}) of
         {ok, Addr, Opts} ->
@@ -345,10 +346,10 @@ pool_extend_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux
                             {error, Reason}
     end.
 
-
+%% Decline is just a special case for free
 pool_decline_addr(State, Aux) -> 
     pool_free_addr(State, decline). 
-
+%% Release is just a special case for free
 pool_release_addr(State, Aux) -> 
     pool_free_addr(State, release). 
 
