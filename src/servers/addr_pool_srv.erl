@@ -124,7 +124,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 
-%% A n'Either State a' monadic binding in Erlang..
+%%
 bind(Fun, {ok, State, Opts}) when is_function(Fun) -> Fun(State, Opts);
 bind(_, {error, _} = Other) -> Other.  
 
