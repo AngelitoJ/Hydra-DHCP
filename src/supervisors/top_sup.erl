@@ -34,7 +34,7 @@ init(Opts) ->
                      ,?CHILDSUP(middleman_sup,  Opts)  %% Middleman pool (coding,decoding and fingerprinting) supervisor
                      ,?CHILDSUP(network_sup,    Opts)  %% Network components supervisor
                     ],
-    io:format("~p: Init, I got ~p children to spawn..\n", [?MODULE,length(ChildrenSpec)]),
+    io:format("[~p]: Init, I got ~p children to spawn..\n", [?MODULE,length(ChildrenSpec)]),
 
     {ok, { {one_for_one, 5, 10},
     							ChildrenSpec } }.
