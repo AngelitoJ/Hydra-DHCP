@@ -374,14 +374,15 @@ allocate_address(State, ClientId, RequestedIP, Options) ->
 
 allocate_address(State, Address, ClientId) ->
     case proplists:get_value(leasetime, Address#address.options, not_found) of
-    not_found -> {error, "Lease time not configured."};
-    {lease_time, LeaseTime} ->
-        Now     = calendar:datetime_to_gregorian_seconds({date(), time()}),
-        Expires = Now + LeaseTime,
-        Lease   = #lease{ clientid = ClientId, ip = Address#address.ip, expires = Expires},
-        leases_insert(State, Lease),
-        pool_update(State, Address#address{status = allocated}),
-        {ok, Address#address.ip, Address#address.options }
+        not_found ->
+                    {error, "Lease time not configured."};
+        {lease_time, LeaseTime} ->
+                    Now     = calendar:datetime_to_gregorian_seconds({date(), time()}),
+                    Expires = Now + LeaseTime,
+                    Lease   = #lease{ clientid = ClientId, ip = Address#address.ip, expires = Expires},
+                    leases_insert(State, Lease),
+                    pool_update(State, Address#address{status = allocated}),
+                    {ok, Address#address.ip, Address#address.options }
     end.
 
 
