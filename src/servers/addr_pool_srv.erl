@@ -59,7 +59,7 @@ init(Opts) ->
                             ,fun init_table_names/2        %% seup table names and files
                             ,fun init_addrs_table/2        %% create the main table (ETS)
                             ,fun init_leases_table/2       %% open or create the leases only table (DETS)
-                            ,fun init_range/2              %% populate addrs table with entrey form allowed range
+                            ,fun init_range/2              %% populate addrs table with entries from allowed range
                             ,fun init_options/2            %% store options into state
                             ,fun init_leases/2             %% transfer active leases from DEST to ETS and remove stale entries
                         ]),
