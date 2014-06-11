@@ -51,17 +51,17 @@ start_link(Opts) ->
 
 init(Opts) ->
     Result = sequence(
-                         {ok, #st{}, Opts}
-                        ,[                       
-                             fun init_id/2
-                            ,fun init_filepath/2
-                            ,fun init_simple_pool/2
-                            ,fun init_table_names/2
-                            ,fun init_addrs_table/2
-                            ,fun init_leases_table/2
-                            ,fun init_range/2
-                            ,fun init_options/2
-                            ,fun init_leases/2
+                         {ok, #st{}, Opts}                 %% Initial empty state and opts from supervisor
+                        ,[                        
+                             fun init_id/2                 %% get client id we are managing
+                            ,fun init_filepath/2           %% get pool config file
+                            ,fun init_simple_pool/2        %% load the config file contents
+                            ,fun init_table_names/2        %% seup table names and files
+                            ,fun init_addrs_table/2        %% create the main table (ETS)
+                            ,fun init_leases_table/2       %% open or create the leases only table (DETS)
+                            ,fun init_range/2              %% populate addrs table with entrey form allowed range
+                            ,fun init_options/2            %% store options into state
+                            ,fun init_leases/2             %% transfer active leases from DEST to ETS and remove stale entries
                         ]),
 
     case Result of
