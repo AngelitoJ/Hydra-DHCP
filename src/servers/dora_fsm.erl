@@ -203,7 +203,7 @@ bound({release, MyPid, Packet}, #st{ id = Id } = State) ->
     Result = sequence(
                         {ok, State, Packet}         %% initial state
                         ,[                       
-                             fun pool_free_addr/2
+                             fun pool_release_addr/2
                         ]),
     case Result of
         {ok, NewState, _} ->
@@ -218,7 +218,7 @@ bound({decline, MyPid, Packet}, #st{ id = Id } = State) ->
     Result = sequence(
                         {ok, State, Packet}         %% initial state
                         ,[                       
-                             fun pool_free_addr/2
+                             fun pool_decline_addr/2
                         ]),
     case Result of
         {ok, NewState, _} ->
