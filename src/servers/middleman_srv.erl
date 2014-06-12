@@ -83,35 +83,35 @@ handle_cast({dhcp, _Scope, Packet}, #st{ id = Id, fsm_cache = Cache } = State) -
 
 %% Handle a DORA fsm message
 handle_cast({offer, Record}, #st{id = Id} = State) ->
-      io:format("~p: msg received!! ~p\n",[Id, offer]),
+      io:format("[~p]: msg received!! ~p\n",[Id, offer]),
     {noreply, State};
 
 handle_cast({ack, Record}, #st{id = Id} = State) ->
-      io:format("~p: msg received!! ~p\n",[Id, ack]),
+      io:format("[~p]: msg received!! ~p\n",[Id, ack]),
     {noreply, State};
 
 handle_cast({nack, Record}, #st{id = Id} = State) ->
-      io:format("~p: msg received!! ~p\n",[Id, nack]),
+      io:format("[~p]: msg received!! ~p\n",[Id, nack]),
     {noreply, State};
 
 handle_cast({Other, Record}, #st{id = Id} = State) ->
-      io:format("~p: msg received!! ~p\n",[Id, Other]),
+      io:format("[~p]: msg received!! ~p\n",[Id, Other]),
     {noreply, State};
 
 
 %% Handle a binary coded erlang term
 handle_cast({udp, Scope, Packet}, #st{id = Id} = State) ->
-      io:format("~p: msg received!! ~p\n",[Id, binary_to_term(Packet)]),
+      io:format("[~p]: msg received!! ~p\n",[Id, binary_to_term(Packet)]),
     {noreply, State};
 
 %% Handle any unknow message
 handle_cast(Msg, #st{id = Id} = State) ->
-      io:format("~p: msg received!! ~p\n I must die!!\n",[Id, Msg]),
+      io:format("[~p]: msg received!! ~p\n I must die!!\n",[Id, Msg]),
     {stop, i_dont_like_these_msgs, State}.
 
 %% Handle a DOWN message from a diying fsm and remove it from the cache.
 handle_info({'DOWN', _, process, Pid, Reason}, #st{ fsm_cache = Cache} = State) ->
-    io:format("~p: Hey! client FSM ~p terminated with reason: ~p..\n", [?MODULE,Pid,Reason]),
+    io:format("[~p]: Hey! client FSM ~p terminated with reason: ~p..\n", [?MODULE,Pid,Reason]),
     NewState = State#st{ fsm_cache = cache:remove_by_pid(Cache, Pid) },
 
     {noreply,  NewState };
