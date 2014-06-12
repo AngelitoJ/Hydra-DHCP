@@ -18,34 +18,11 @@ get_next({Used, [Next|Rest]}) -> {Next, {[Next|Used], Rest}}.         %% Return 
 
 
 %% delete a faulty Pid from the available list of Pids and return the new pool or 'empty'
+remove_pid(empty, Pid) when is_pid(Pid) ->
+    empty;
 remove_pid({Used, Rest},Pid) when is_pid(Pid) ->
   case {Used -- [Pid], Rest -- [Pid]} of
     {[],[]}       -> empty;
     {List1,List2} -> {List1,List2}
   end.
 
--ifdef(TEST).
-
--include_lib("eunit/include/eunit.hrl").
-
-pool_test_() -> { inparallel, [
-                    %% empty new
-                   {"pool new",?_assertEqual(empty
-                                    ,new())}
-                    %% empty list new
-                  ,?_assertEqual(empty
-                                    ,new([]))
-                    %% non empty list new
-                  ,{"pool new2",?_assertEqual({[], [one,two,three]}
-                                    ,new([one,two,three]))}
-                    %% pool get next
-                  ,{"pool get_next1",?_assertEqual({one, {[one],[two,three]}}
-                                    ,get_next(new([one,two,three])) )}
-                    %% pool get next with list recycling
-                  ,{"pool get_next2",?_assertEqual({one, {[one],[two,three]}}
-                                    ,get_next( {[one,two,three], []} ) )}
-                    %% pool remove
-                  ,{"pool remove_pid", ?_assertEqual({[one], [three]}, remove_pid({[one,self()], [three]},self()))}
-                ]}.
-
--endif.
