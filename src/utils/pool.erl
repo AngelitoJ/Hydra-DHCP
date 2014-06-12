@@ -30,23 +30,22 @@ remove_pid({Used, Rest},Pid) when is_pid(Pid) ->
 
 pool_test_() -> { inparallel, [
                     %% empty new
-                   ?_assertEqual(empty
-                                    ,new())
+                   {"pool new",?_assertEqual(empty
+                                    ,new())}
                     %% empty list new
                   ,?_assertEqual(empty
                                     ,new([]))
                     %% non empty list new
-                  ,?_assertEqual({[], [one,two,three]}
-                                    ,new([one,two,three]))
+                  ,{"pool new2",?_assertEqual({[], [one,two,three]}
+                                    ,new([one,two,three]))}
                     %% pool get next
-                  ,?_assertEqual({one, {[one],[two,three]}}
-                                    ,get_next(new([one,two,three])) )
+                  ,{"pool get_next1",?_assertEqual({one, {[one],[two,three]}}
+                                    ,get_next(new([one,two,three])) )}
                     %% pool get next with list recycling
-                  ,?_assertEqual({one, {[one],[two,three]}}
-                                    ,get_next( {[one,two,three], []} ) )
+                  ,{"pool get_next2",?_assertEqual({one, {[one],[two,three]}}
+                                    ,get_next( {[one,two,three], []} ) )}
                     %% pool remove
-                  ,?_assertEqual({[one], [three]}
-                  	                , remove_pid({[one,self()], [three]},self()) )
+                  ,{"pool remove_pid", ?_assertEqual({[one], [three]}, remove_pid({[one,self()], [three]},self()))}
                 ]}.
 
 -endif.
