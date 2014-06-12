@@ -23,3 +23,7 @@ ipv4_pred({A, 0, 0, 1}) -> {A-1, 254, 254, 254};
 ipv4_pred({A, B, 0, 1}) -> {A, B-1, 254, 254};
 ipv4_pred({A, B, C, 1}) -> {A, B, C-1, 254};
 ipv4_pred({A, B, C, D}) -> {A, B, C, D-1}.
+
+%% Apply a mask to an IPv4 address to get its network address
+get_network({A, B, C, D}, {I, J, K, L}) ->
+    {A band I, B band J, C band K, D band L}.
