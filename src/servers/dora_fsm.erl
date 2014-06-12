@@ -91,8 +91,21 @@ idle({discover, MyPid, Packet}, #st{ id = Id } = State) ->
 
 
 idle({inform, MyPid, Packet}, #st{ id = Id } = State) ->
-    ?STATE_TRACE(Id, inform, idle, idle),
-    {next_state, idle, State};
+    Result = sequence(
+                         {ok, State, Packet}
+                        ,[
+                            fun pool_get_conf/2
+                        ]),
+    case Result of
+        {ok, NewState, _} ->
+                            send_ack(NewState),
+                            ?STATE_TRACE(Id, inform, idle, idle),
+                            {next_state, idle, State, 30000};
+        {error, Reason}   ->
+                            send_nack(State),
+                            ?STATE_TRACE(Id, inform, idle, idle),
+                            {next_state, idle, State, 30000}
+    end;
 
 idle({request, init_reboot, MyPid, Packet}, #st{ id = Id, pools = Pools} = State) ->
     Result = sequence(
@@ -144,18 +157,17 @@ offer({request, selecting, MyPid, Packet}, #st{ id = Id } = State) ->
                             ,fun pool_allocate_addr/2
                         ]),
     case Result of
-        {ok, NewState, _} ->
-                            send_ack(NewState, MyPid),
-                            ?STATE_TRACE(Id, request, offer, bound),
-                            {next_state, bound, NewState};
-        {error, ignore}   ->
-                            ?STATE_TRACE(Id, ignore, offer, offer),
-                            {next_state, offer, State, 1000};         %% setup timer in offre state to force address release on timeout
-
-        {error, Reason}   ->
-                            send_nack(State, MyPid),
-                            ?STATE_TRACE(Id, request, offer, stop),
-                            {next_state, idle, State}
+        {ok, NewState, _}    ->                                           %% Allocation was ok send ACK to client
+                                send_ack(NewState, MyPid),
+                                ?STATE_TRACE(Id, request, offer, bound),
+                                {next_state, bound, NewState};
+        {error, no_selected} ->                                           %% Client choosed other server for this request
+                                ?STATE_TRACE(Id, ignore, offer, offer),
+                                {next_state, offer, State, 1000};         %% setup timer ito force address release on timeout
+        {error, Reason}      ->                                           %% Something went wrong, siognal to client
+                                send_nack(State, MyPid),
+                                ?STATE_TRACE(Id, request, offer, stop),
+                                {next_state, idle, State}
     end;
 
 offer(Any, #st{ id = Id } = State) ->
@@ -363,10 +375,28 @@ pool_free_addr(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux) 
                             {error, Reason}
     end.
 
-is_server_selected(_,_) -> undefined.
+pool_get_conf(#st{ id = Id, addr_server = PoolPid, addr = Addr } = State, Aux) ->
+    case gen_server:call(PoolPid, {conf, Id}) of
+        {ok, Opts}      ->
+                            {ok, State, Aux};
+        {error, Reason} ->
+                            {error, Reason}
+    end.
+
+%% Test whether the server_id of the packet is equal to this FSM server_id
+is_server_selected(State, Packet) -> 
+    case get_server_id(Packet) == State#st.server_id of
+        true ->
+                {ok, State, Packet};
+        false ->
+                {error, no_selected}
+    end.
+
+get_server_id(_) -> undefined.
 select_pool(_,_,_) -> undefined.
 send_offer(_,_,_,_) -> undefined.
 send_ack(_) -> undefined.
+send_nack(_) -> undefined.
 send_ack(_,_) -> undefined.
 send_nack(_,_) -> undefined.
 get_serverid(_) -> undefined.
