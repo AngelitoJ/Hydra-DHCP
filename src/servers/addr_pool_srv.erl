@@ -67,7 +67,7 @@ init(Opts) ->
 
     case Result of
         {ok, State, _} -> {ok, State};
-        {error, Reason} -> {stop, Reason}
+        {error, Reason, _State} -> {stop, Reason}
     end.
 
 %% give a fun suitable to select this pool
@@ -82,46 +82,65 @@ handle_call(selection_fun, _From, State) ->
 %% Look for a suitable free address for the client (client can request one) and mark it as offered.
 handle_call({reserve, ClientId, RequestedIP}, _From, State) ->
     Result = case select_address(State, ClientId, RequestedIP) of
-        {ok, Addr}      -> reserve_address(State, ClientId, Addr#address.ip);  
-        {error, Reason} -> {error, Reason}
+        {ok, IP}        ->
+                            case reserve_address(State, ClientId, IP) of
+                                ok              -> {ok, IP, State#st.options};  
+                                {error, Reason} -> {error, Reason}
+                            end;  
+        {error, Reason} ->
+                            {error, Reason}
     end,
     {reply, Result, State};
 
 %% Mark an address as allocated. Address must be in offered state 
 handle_call({allocate, ClientId, RequestedIP}, _From, State) ->
     Result = case allocate_address(State, ClientId, RequestedIP) of
-        {ok, Addr}      -> {ok, Addr};
-        {error, Reason} -> {error, Reason}
+        ok              ->
+                            {ok, IP, State#st.options};
+        {error, Reason} ->
+                            {error, Reason}
     end.
     {reply, Result, State};
 
-
+%% Try to extent the lease on an allocated IP
 handle_call({extend, _ClientId}, _From, State) ->
-    {reply, ok, State};
+    Result = case extent_address(State, ClientId, RequestedIP) of
+        ok              ->
+                            {ok, IP, State#st.options};
+        {error, Reason} ->
+                            {error, Reason}
+    end.
+    {reply, Result, State};
+
 handle_call({decline, _ClientId}, _From, State) ->
-    {reply, ok, State};
+    Result = case decline_address(State, ClientId, RequestedIP) of
+        ok              ->
+                            {ok, IP, State#st.options};
+        {error, Reason} ->
+                            {error, Reason}
+    end.
+    {reply, Result, State};
+
 handle_call({release, _ClientId}, _From, State) ->
-    {reply, ok, State};
+    Result = case release_address(State, ClientId, RequestedIP) of
+        ok              ->
+                            {ok, IP, State#st.options};
+        {error, Reason} ->
+                            {error, Reason}
+    end.
+    {reply, Result, State};
 handle_call({verify, _ClientId} , _From, State) ->
     {reply, ok, State};
+
 handle_call({info, _ClientId}, _From, State) ->
     {reply, ok, State};
 
 
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
-
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-
-handle_info(_Info, State) ->
-    {noreply, State}.
-
-terminate(_Reason, _State) ->
-    ok.
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+handle_call(_Request, _From, State) -> {reply, ok, State}.
+handle_cast(_Msg, State)            -> {noreply, State}.
+handle_info(_Info, State)           -> {noreply, State}.
+terminate(_Reason, _State)          -> ok.
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -129,8 +148,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %%
-bind(Fun, {ok, State, Opts}) when is_function(Fun) -> Fun(State, Opts);
-bind(_, {error, _} = Other) -> Other.  
+bind(Fun, {ok, State, Env}) when is_function(Fun) -> Fun(State, Env);
+bind(_, {error, _, _} = Other) -> Other.  
 
 sequence(Initial, Computations) ->
     lists:foldl(fun bind/2, Initial, Computations).
@@ -142,7 +161,7 @@ init_id(State, Opts) ->
         true -> 
                 {ok, State#st{ id = proplists:get_value(who_you_are,Opts)}, Opts};
         false ->
-                {error, not_id}
+                {error, not_id, State}
     end.
 
 %% Setup path to pool file
@@ -151,7 +170,7 @@ init_filepath(State, Opts) ->
         true -> 
                 {ok, State#st{ filepath = proplists:get_value(pool_file,Opts)}, Opts};
         false ->
-                {error, not_pool_file}
+                {error, not_pool_file, State}
     end.
 
 %% Load pool contest from file 
@@ -161,7 +180,7 @@ init_simple_pool(#st{ id = Id } = State, Opts) ->
             io:format("[~p]: Initiating pool from file ~ts..\n", [Id,State#st.filepath]),
             {ok, State, PoolOpts};
         _ -> 
-            {error, unknow_pool_format}
+            {error, unknow_pool_format, State}
     end.
 
 %% Setup pool and table names
@@ -178,7 +197,7 @@ init_table_names(State,Opts) ->
                             ] ++ proplists:delete(name, Opts),      %% delete old name property
             {ok, State, NewOpts};
         false ->
-                {error, no_pool_name}
+                {error, no_pool_name, State}
     end.
 
 
@@ -201,7 +220,7 @@ init_addrs_table(#st{ id = Id } = State, Opts) ->
                 end,
                 {ok, State#st{ pool = Tidpool }, Opts};
         false ->
-                {error, no_ets_name}
+                {error, no_ets_name, State}
     end.
 
 %% Open or recreate a DETS file to persist lease information
@@ -217,7 +236,7 @@ init_leases_table(#st{ id = Id} = State, Opts) ->
                                                         ]),
                 {ok, State#st{ leases =  Tidleases }, Opts};
         false ->
-                {error, no_dets_name}
+                {error, no_dets_name, State}
     end.
 
 %% Populate the ETS table with free addresses         
@@ -233,7 +252,7 @@ init_range(#st{id = Id, pool = Tid } = State, Opts) ->
                                 ,End ),
                 io:format("[~p]: Populating pool from ~p to ~p.. (~p entries)\n", [Id,Start,End, Entries]),
                 {ok, State, Opts};
-        false -> {error, no_range}
+        false -> {error, no_range, State}
     end.
 
 %% store pool client options
@@ -246,7 +265,7 @@ init_options(#st{ id = Id } = State, Opts) ->
                                 Options ),
                 {ok, State#st{ options = Options }, Opts};
         false -> 
-                {error, no_pool_options }
+                {error, no_pool_options, State}
     end.
 
 %% Transfer leases to pool folding over the dets table to avoid collecting large results
@@ -312,98 +331,6 @@ leases_remove(State, Id) ->
     ok = dets:delete(State#st.leases, Id).
 
 
-
-%% Try to select the first free IP address available
--spec select_address(st(), any, tuple()) -> [ | char()]) -> 'ok'.
-select_address(State, _ClientId, {0, 0, 0, 0}) ->
-    case pool_lookup(State, #address{ ip = '$1', status = free }) of
-        [Addr]        -> {ok, Addr};
-        not_found     -> {error, not_found}
-    end;
-
-%% Try to select the client requested IP if posible.
-select_address(#st{ options = Options } = State, ClientId, RequestedIP) ->
-    Now = calendar:datetime_to_gregorian_seconds({date(), time()}),
-    case pool_lookup(State, #address{ ip = RequestedIP, status = free }) of
-        %% Address is free we can use it for this client
-        {ok, Addr} ->
-            {ok, Addr#address{ options = Options}};
-        %% Address is not free, maybe this client is holding it...
-        not_found  -> 
-            case pool_lookup(State, #address{ 
-                                                 ip     = RequestedIP
-                                                ,status = allocated
-                                                ,lease = #lease{ clientid = ClientId }
-                                                }) of
-                %% Client hold thid lease and it is still valid
-                {ok, Addr} when Addr#address.lease#lease.expires > Now ->
-                                {ok, Addr};
-                %% Client hold this lease but it is expired (we reuse it)
-                {ok, Addr} ->
-                                {ok, Addr};
-                %% This client does not hold this address, we need to lookup up any other available..                                                     
-                not_found  ->
-                                select_address(State, ClientId, {0,0,0,0})
-                end
-    end.
-
-
-
-    % case leases_lookup(State, ClientId, Now) of
-    %     %% There is a active lease, we use it ignoring the client requested IP
-    %     {ok, Lease}      -> {ok, #address{ip = Lease#lease.ip, options = Options}};
-
-    %     %% There is a expired lease, we have to check the pool                                                                
-    %     {expired, Lease} -> case pool_lookup_ip(State, Lease#lease.ip) of
-    %                         %% The address is free we can reuse it anyway
-    %                         {free, Address}    -> {ok, Address#address{options = Options}};
-    %                         %% The address is not free , we remove the lease and try again
-    %                         _                  -> leases_remove(State, ClientId),
-    %                                               select_address(State, ClientId, RequestedIP)
-    %                         end;
-    %     %% There is no lease we try to get a new address from the pool                
-    %     not_found        -> case pool_lookup_ip(State, RequestedIP) of
-    %                         %% the address is free we use it
-    %                         {free, Address}    -> {ok, Address#address{ options = Options}};
-    %                         %% the address is offered 
-    %                         {offered, _Address} -> {error, "Address is offered"};
-    %                         %% no address found we try any address free
-    %                         not_found          -> select_address(State, ClientId, {0,0,0,0})
-    %                        end
-    % end.
-
-%% Mark an address as offered 
-reserve_address(st#{options = Options } = State, ClientId, RequestedIP ) ->
-    pool_update(State, Addr#address{
-                                     status = offered                             %% Mark as offered
-                                    ,lease  = #lease{clientid = ClientId          %% Annotate clientid
-                                    }}),    
-    {ok, Address#address{}}.
-
-%% Mark an IP address as allocated to a Client and commit to leases file 
-allocate_address(#st{ options = Options } = State, ClientId, RequestedIP) ->
-    Now     = calendar:datetime_to_gregorian_seconds({date(), time()}),
-    Expires = Now + LeaseTime,
-    Lease   = #lease{ clientid = ClientId, ip = Address#address.ip, expires = Expires},
-    
-    leases_insert(State, Lease),
-    pool_update(State, Address#address{ip = RequestedIPS, status = allocated, options = Options}),
-    {ok, Address#address.ip, Address#address.options }
-
-    % Result = case pool_lookup(State, RequestedIP) of
-    %     {offered, Address} -> allocate_address(State, Address, ClientId);
-    %     {_, _Address}      -> {error, "Address is not offered."};
-    %     not_found          -> {error, "Address was not found."}
-    % end,
-
-%%    allocate_address(State, #address{ip = RequestedIP, options = Options}, ClientId).
-
-allocate_address(State, Address, ClientId) ->
-    case proplists:get_value(leasetime, Address#address.options, not_found) of
-        not_found ->
-                    {error, "Lease time not configured."};
-        {lease_time, LeaseTime} ->
-    end.
 
 
 
