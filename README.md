@@ -11,6 +11,8 @@ This is work in progress, yet a rebarized "shell" is provided from day one to ma
 Unix program, so for the most part you only need to follow the install instructions to get a single standalone "hdcp-server" escript bundle.
 
 
+As Aug'14 this project is on hold so updates will make their way on a very slow fashion.
+
 Project status
 ===============
 
