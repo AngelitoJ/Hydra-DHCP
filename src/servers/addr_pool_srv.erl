@@ -96,38 +96,38 @@ handle_call({reserve, ClientId, RequestedIP}, _From, State) ->
 handle_call({allocate, ClientId, RequestedIP}, _From, State) ->
     Result = case allocate_address(State, ClientId, RequestedIP) of
         ok              ->
-                            {ok, IP, State#st.options};
+                            {ok, RequestedIP, State#st.options};
         {error, Reason} ->
                             {error, Reason}
-    end.
+    end,
     {reply, Result, State};
 
 %% Try to extent the lease on an allocated IP
-handle_call({extend, _ClientId}, _From, State) ->
-    Result = case extent_address(State, ClientId, RequestedIP) of
+handle_call({extend, ClientId, RequestedIP}, _From, State) ->
+    Result = case extend_address(State, ClientId, RequestedIP) of
         ok              ->
-                            {ok, IP, State#st.options};
+                            {ok, RequestedIP, State#st.options};
         {error, Reason} ->
                             {error, Reason}
-    end.
+    end,
     {reply, Result, State};
 
-handle_call({decline, _ClientId}, _From, State) ->
+handle_call({decline, ClientId, RequestedIP}, _From, State) ->
     Result = case decline_address(State, ClientId, RequestedIP) of
         ok              ->
-                            {ok, IP, State#st.options};
+                            {ok, RequestedIP, State#st.options};
         {error, Reason} ->
                             {error, Reason}
-    end.
+    end,
     {reply, Result, State};
 
-handle_call({release, _ClientId}, _From, State) ->
+handle_call({release, ClientId, RequestedIP}, _From, State) ->
     Result = case release_address(State, ClientId, RequestedIP) of
         ok              ->
-                            {ok, IP, State#st.options};
+                            {ok, RequestedIP, State#st.options};
         {error, Reason} ->
                             {error, Reason}
-    end.
+    end,
     {reply, Result, State};
 handle_call({verify, _ClientId} , _From, State) ->
     {reply, ok, State};
@@ -331,7 +331,12 @@ leases_remove(State, Id) ->
     ok = dets:delete(State#st.leases, Id).
 
 
-
+select_address(State, ClientId, RequestedIP)   -> {error, not_implemented}.
+reserve_address(State, ClientId, RequestedIP)  -> {error, not_implemented}.
+allocate_address(State, ClientId, RequestedIP) -> {error, not_implemented}.
+extend_address(State, ClientId, RequestedIP) -> {error, not_implemented}.
+decline_address(State, ClientId, RequestedIP) -> {error, not_implemented}.
+release_address(State, ClientId, RequestedIP) -> {error, not_implemented}.
 
 
 
