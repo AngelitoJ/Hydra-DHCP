@@ -52,14 +52,14 @@ app_setup(AppName,Args) ->
     {ok,Description}         = application:get_key(AppName,description),
     AppFilename              = escript:script_name(),
 
-    io:format("~s\nVersion: ~s\n\n",[Description,Version]),
-
-	%% Scan app modules requiring options descriptor processing (Those exporting option_specs functions).
-    OptionProviders          = module_tools:list_app_modules(AppName,exports,option_specs),
+    %% Scan app modules requiring options descriptor processing (Those exporting option_specs functions).
+    OptionProviders          = getoptex:list_app_modules(AppName,exports,option_specs),
 
     %% Collect all option descriptors and funs into a single list.
     {OptSpecList,OptFunList} = getoptex:collect_option_providers(OptionProviders), 
 
+
+    io:format("~s\nVersion: ~s\n\n",[Description,Version]),
 
     %% Parse args using option descriptors and then check args values using provided funs.
     case getoptex:parse_args(OptSpecList, Args, OptFunList) of
@@ -122,8 +122,6 @@ wait_for_app(Timeout) ->
             io:format("[MAIN] Application Timeout\n",[]),
             stopped 
     end.
-
-
 
 %% Args processing funs are a sort of monadic functions working on a Either OptionRecord Error..
 
